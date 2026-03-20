@@ -129,7 +129,7 @@ function TiendanubeSection({ connected }) {
         <form onSubmit={connect} className="space-y-3 pt-2 border-t border-navy-800">
           <div><label className="label">Store ID</label><input className="input" placeholder="Tu ID de tienda" value={form.storeId} onChange={set('storeId')} required /></div>
           <div><label className="label">Access Token</label><input className="input" type="password" placeholder="Token de acceso a la API" value={form.accessToken} onChange={set('accessToken')} required /></div>
-          <p className="text-xs text-gray-500">Encontrás estos datos en Tiendanube > Configuración > API / Integraciones</p>
+          <p className="text-xs text-gray-500">Encontras estos datos en Tiendanube, seccion Configuracion, API / Integraciones</p>
           <div className="flex gap-2">
             <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancelar</button>
             <button type="submit" disabled={connecting} className="btn-primary">{connecting ? 'Conectando...' : 'Conectar'}</button>
@@ -188,7 +188,7 @@ function WhatsAppSection({ connected }) {
         <form onSubmit={save} className="space-y-3 pt-2 border-t border-navy-800">
           <div><label className="label">Phone Number ID</label><input className="input" placeholder="ID del número" value={form.phoneId} onChange={set('phoneId')} required /></div>
           <div><label className="label">Access Token</label><input className="input" type="password" placeholder="Token de Meta" value={form.accessToken} onChange={set('accessToken')} required /></div>
-          <p className="text-xs text-gray-500">Obtenelos en developers.facebook.com > WhatsApp > API Setup</p>
+          <p className="text-xs text-gray-500">Obtenelos en developers.facebook.com, seccion WhatsApp, API Setup</p>
           <div className="flex gap-2">
             <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancelar</button>
             <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : 'Guardar'}</button>
