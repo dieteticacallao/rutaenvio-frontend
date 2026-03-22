@@ -150,7 +150,7 @@ function OrderModal({ order, onClose, onSaved }) {
   const [form, setForm] = useState({
     customerName: order?.customerName || '', customerPhone: order?.customerPhone || '',
     address: order?.address || '', addressDetail: order?.addressDetail || '',
-    city: order?.city || '', zipCode: order?.zipcode || '', notes: order?.notes || ''
+    city: order?.city || '', province: order?.province || 'Buenos Aires', zipCode: order?.zipcode || '', notes: order?.notes || ''
   })
   const [saving, setSaving] = useState(false)
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
@@ -191,9 +191,19 @@ function OrderModal({ order, onClose, onSaved }) {
           <div><label className="label">Telefono</label><input className="input" value={form.customerPhone} onChange={set('customerPhone')} /></div>
         </div>
         <div><label className="label">Direccion *</label><input className="input" placeholder="Av. Corrientes 1234" value={form.address} onChange={set('address')} required /></div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <div><label className="label">Depto/piso</label><input className="input" placeholder="3ro B" value={form.addressDetail} onChange={set('addressDetail')} /></div>
           <div><label className="label">Ciudad</label><input className="input" value={form.city} onChange={set('city')} /></div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Provincia</label>
+            <select className="input" value={form.province} onChange={set('province')}>
+              {['Buenos Aires','CABA','Catamarca','Chaco','Chubut','Cordoba','Corrientes','Entre Rios','Formosa','Jujuy','La Pampa','La Rioja','Mendoza','Misiones','Neuquen','Rio Negro','Salta','San Juan','San Luis','Santa Cruz','Santa Fe','Santiago del Estero','Tierra del Fuego','Tucuman'].map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
           <div><label className="label">Codigo Postal *</label><input className="input" placeholder="1407" value={form.zipCode} onChange={set('zipCode')} required /></div>
         </div>
         <div><label className="label">Notas</label><input className="input" placeholder="Tocar timbre 2B" value={form.notes} onChange={set('notes')} /></div>
