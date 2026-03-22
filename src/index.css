@@ -31,7 +31,6 @@
 }
 
 .leaflet-container { background: #111829 !important; border-radius: 12px; }
-.leaflet-tile-pane { filter: saturate(0.3) brightness(0.65) contrast(1.1); }
 .leaflet-control-zoom a { background: #1a2342 !important; color: #94a3b8 !important; border-color: #1e293b !important; }
 .leaflet-popup-content-wrapper { background: #1a2342 !important; color: #e2e8f0 !important; border-radius: 10px !important; }
 .leaflet-popup-tip { background: #1a2342 !important; }

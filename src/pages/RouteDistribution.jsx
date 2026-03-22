@@ -43,8 +43,8 @@ export default function RouteDistribution() {
       zoomControl: true
     })
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap'
+    L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap contributors, © CARTO'
     }).addTo(mapInstance.current)
 
     setTimeout(() => mapInstance.current?.invalidateSize(), 300)
