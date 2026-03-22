@@ -150,7 +150,7 @@ function OrderModal({ order, onClose, onSaved }) {
   const [form, setForm] = useState({
     customerName: order?.customerName || '', customerPhone: order?.customerPhone || '',
     address: order?.address || '', addressDetail: order?.addressDetail || '',
-    city: order?.city || '', zipCode: order?.zipCode || '', notes: order?.notes || ''
+    city: order?.city || '', zipCode: order?.zipcode || '', notes: order?.notes || ''
   })
   const [saving, setSaving] = useState(false)
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
