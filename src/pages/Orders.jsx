@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api, STATUS_MAP } from '../lib/store'
-import { Package, Plus, Download, Search, X, MapPin, RefreshCw } from 'lucide-react'
+import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Orders() {
@@ -21,6 +21,17 @@ export default function Orders() {
   }
 
   useEffect(loadOrders, [filter])
+
+  const deleteOrder = async (orderId) => {
+    if (!window.confirm('Estas seguro de que queres eliminar este pedido?')) return
+    try {
+      await api.delete(`/orders/${orderId}/cancel`)
+      toast.success('Pedido eliminado')
+      loadOrders()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al eliminar')
+    }
+  }
 
   const importFromTN = async () => {
     setImporting(true)
@@ -73,7 +84,7 @@ export default function Orders() {
               <th className="text-left p-3">Dirección</th>
               <th className="text-left p-3">Estado</th>
               <th className="text-left p-3">Cadete</th>
-              <th className="text-right p-3 pr-4">Monto</th>
+              <th className="text-right p-3 pr-4">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -103,8 +114,10 @@ export default function Orders() {
                   </span>
                 </td>
                 <td className="p-3 text-gray-400">{order.driver?.name || '—'}</td>
-                <td className="p-3 pr-4 text-right font-mono text-gray-300">
-                  {order.totalAmount ? `$${Number(order.totalAmount).toLocaleString('es-AR')}` : '—'}
+                <td className="p-3 pr-4 text-right">
+                  <button onClick={() => deleteOrder(order.id)} className="text-gray-500 hover:text-red-400 transition-colors" title="Eliminar pedido">
+                    <Trash2 size={16} />
+                  </button>
                 </td>
               </tr>
             ))}
@@ -130,7 +143,7 @@ export default function Orders() {
 function CreateOrderModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
     customerName: '', customerPhone: '', address: '', addressDetail: '', city: '',
-    totalAmount: '', itemsSummary: '', notes: ''
+    zipCode: '', itemsSummary: '', notes: ''
   })
   const [saving, setSaving] = useState(false)
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
@@ -139,7 +152,7 @@ function CreateOrderModal({ onClose, onCreated }) {
     e.preventDefault()
     setSaving(true)
     try {
-      await api.post('/orders', { ...form, totalAmount: form.totalAmount ? parseFloat(form.totalAmount) : null })
+      await api.post('/orders', { ...form })
       toast.success('Pedido creado')
       onCreated()
       onClose()
@@ -162,14 +175,12 @@ function CreateOrderModal({ onClose, onCreated }) {
           <div><label className="label">Teléfono</label><input className="input" value={form.customerPhone} onChange={set('customerPhone')} /></div>
         </div>
         <div><label className="label">Dirección *</label><input className="input" placeholder="Av. Corrientes 1234" value={form.address} onChange={set('address')} required /></div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div><label className="label">Depto/piso</label><input className="input" placeholder="3° B" value={form.addressDetail} onChange={set('addressDetail')} /></div>
           <div><label className="label">Ciudad</label><input className="input" placeholder="CABA" value={form.city} onChange={set('city')} /></div>
+          <div><label className="label">Codigo Postal</label><input className="input" placeholder="1407" value={form.zipCode} onChange={set('zipCode')} /></div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div><label className="label">Monto</label><input className="input" type="number" placeholder="15000" value={form.totalAmount} onChange={set('totalAmount')} /></div>
-          <div><label className="label">Productos</label><input className="input" placeholder="2x Remera, 1x Jean" value={form.itemsSummary} onChange={set('itemsSummary')} /></div>
-        </div>
+        <div><label className="label">Productos</label><input className="input" placeholder="2x Remera, 1x Jean" value={form.itemsSummary} onChange={set('itemsSummary')} /></div>
         <div><label className="label">Notas</label><input className="input" placeholder="Tocar timbre 2B" value={form.notes} onChange={set('notes')} /></div>
 
         <div className="flex gap-2 justify-end">
