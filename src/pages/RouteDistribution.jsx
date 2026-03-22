@@ -30,8 +30,9 @@ export default function RouteDistribution() {
     }).catch(() => setLoading(false))
   }, [])
 
-  // Initialize map once
+  // Initialize map once (depends on loading so it runs after the map div is in the DOM)
   useEffect(() => {
+    if (loading) return
     if (!mapRef.current || mapInstance.current) return
     const L = window.L
     if (!L) return
@@ -46,8 +47,10 @@ export default function RouteDistribution() {
       attribution: '© OpenStreetMap'
     }).addTo(mapInstance.current)
 
+    setTimeout(() => mapInstance.current?.invalidateSize(), 300)
+
     return () => { if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null } }
-  }, [])
+  }, [loading])
 
   // Ensure map recalculates size when step changes
   useEffect(() => {
