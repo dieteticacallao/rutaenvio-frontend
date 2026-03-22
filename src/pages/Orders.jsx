@@ -25,7 +25,7 @@ export default function Orders() {
   const deleteOrder = async (orderId) => {
     if (!window.confirm('Estas seguro de que queres eliminar este pedido?')) return
     try {
-      await api.delete(`/orders/${orderId}/cancel`)
+      await api.delete(`/orders/${orderId}`)
       toast.success('Pedido eliminado')
       loadOrders()
     } catch (err) {
@@ -143,7 +143,7 @@ export default function Orders() {
 function CreateOrderModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
     customerName: '', customerPhone: '', address: '', addressDetail: '', city: '',
-    zipCode: '', itemsSummary: '', notes: ''
+    zipCode: '', notes: ''
   })
   const [saving, setSaving] = useState(false)
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
@@ -180,7 +180,6 @@ function CreateOrderModal({ onClose, onCreated }) {
           <div><label className="label">Ciudad</label><input className="input" placeholder="CABA" value={form.city} onChange={set('city')} /></div>
           <div><label className="label">Codigo Postal</label><input className="input" placeholder="1407" value={form.zipCode} onChange={set('zipCode')} /></div>
         </div>
-        <div><label className="label">Productos</label><input className="input" placeholder="2x Remera, 1x Jean" value={form.itemsSummary} onChange={set('itemsSummary')} /></div>
         <div><label className="label">Notas</label><input className="input" placeholder="Tocar timbre 2B" value={form.notes} onChange={set('notes')} /></div>
 
         <div className="flex gap-2 justify-end">
