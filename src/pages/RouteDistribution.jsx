@@ -98,6 +98,9 @@ export default function RouteDistribution() {
     markersRef.current.forEach(m => m.remove())
     markersRef.current = []
 
+    // Include origin in bounds if selected
+    const originLoc = locations.find(l => l.id === selectedLocationId)
+
     if (step === 1) {
       // Show all unassigned orders
       const selected = orders.filter(o => selectedOrders.includes(o.id))
@@ -106,13 +109,17 @@ export default function RouteDistribution() {
       selected.forEach((order, i) => {
         if (!order.lat || !order.lng) return
         const marker = L.marker([order.lat, order.lng], {
-          icon: L.divIcon({ className: 'order-marker', html: `${i + 1}` })
+          icon: L.divIcon({
+            className: '',
+            html: `<div style="width:28px;height:28px;background:#3b82f6;border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 0 8px #3b82f660">${i + 1}</div>`
+          })
         }).bindPopup(`<b>${order.orderNumber}</b><br>${order.customerName}<br>${order.address}`)
         marker.addTo(mapInstance.current)
         markersRef.current.push(marker)
         bounds.push([order.lat, order.lng])
       })
 
+      if (originLoc?.lat && originLoc?.lng) bounds.push([originLoc.lat, originLoc.lng])
       if (bounds.length > 0) mapInstance.current.fitBounds(bounds, { padding: [40, 40] })
     }
 
@@ -145,9 +152,10 @@ export default function RouteDistribution() {
         }
       })
 
+      if (originLoc?.lat && originLoc?.lng) bounds.push([originLoc.lat, originLoc.lng])
       if (bounds.length > 0) mapInstance.current.fitBounds(bounds, { padding: [40, 40] })
     }
-  }, [step, selectedOrders, distribution, orders])
+  }, [step, selectedOrders, distribution, orders, selectedLocationId, locations])
 
   const handleDistribute = async () => {
     if (selectedOrders.length === 0) return toast.error('Seleccioná al menos un pedido')
