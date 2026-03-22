@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api, useAuth } from '../lib/store'
-import { Settings as SettingsIcon, Store, MessageCircle, Link2, Check, AlertCircle } from 'lucide-react'
+import { Settings as SettingsIcon, Store, MessageCircle, Link2, Check, AlertCircle, MapPin, Plus, Star, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -41,6 +41,9 @@ export default function Settings() {
       {/* Business info */}
       <BusinessInfoSection settings={settings} />
 
+      {/* Puntos de origen */}
+      <LocationsSection />
+
       {/* Tiendanube integration */}
       <TiendanubeSection connected={settings?.integrations?.tiendanube} />
 
@@ -80,6 +83,121 @@ function BusinessInfoSection({ settings }) {
       <div><label className="label">Dirección (punto de partida de rutas)</label><input className="input" placeholder="Dirección de tu depósito o local" value={form.address} onChange={set('address')} /></div>
       <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : 'Guardar'}</button>
     </form>
+  )
+}
+
+function LocationsSection() {
+  const [locations, setLocations] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ name: '', address: '' })
+  const [saving, setSaving] = useState(false)
+
+  const loadLocations = () => {
+    api.get('/dashboard/locations').then(r => { setLocations(r.data); setLoading(false) }).catch(() => setLoading(false))
+  }
+
+  useEffect(() => { loadLocations() }, [])
+
+  const handleAdd = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await api.post('/dashboard/locations', form)
+      toast.success('Punto de origen agregado')
+      setForm({ name: '', address: '' })
+      setShowForm(false)
+      loadLocations()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al agregar')
+    }
+    setSaving(false)
+  }
+
+  const handleSetDefault = async (id) => {
+    try {
+      await api.put(`/dashboard/locations/${id}/default`)
+      toast.success('Punto de origen predeterminado actualizado')
+      loadLocations()
+    } catch (err) {
+      toast.error('Error al actualizar')
+    }
+  }
+
+  const handleDelete = async (id) => {
+    try {
+      await api.delete(`/dashboard/locations/${id}`)
+      toast.success('Punto de origen eliminado')
+      loadLocations()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al eliminar')
+    }
+  }
+
+  return (
+    <div className="card-p space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-white flex items-center gap-2"><MapPin size={18} /> Puntos de origen</h3>
+        <button onClick={() => setShowForm(!showForm)} className="btn-secondary text-xs flex items-center gap-1">
+          <Plus size={14} /> Agregar
+        </button>
+      </div>
+
+      <p className="text-sm text-gray-500">
+        Definí los puntos de partida para distribuir tus rutas (deposito, sucursal, etc.)
+      </p>
+
+      {showForm && (
+        <form onSubmit={handleAdd} className="space-y-3 pt-3 border-t border-navy-800">
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="label">Nombre</label><input className="input" placeholder="Ej: Deposito Central" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required /></div>
+            <div><label className="label">Direccion</label><input className="input" placeholder="Av. Corrientes 1234, CABA" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} required /></div>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : 'Guardar'}</button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-gray-500">Cargando...</p>
+      ) : locations.length === 0 ? (
+        <p className="text-sm text-gray-500 text-center py-4">No hay puntos de origen. Agrega uno para usar en la distribucion de rutas.</p>
+      ) : (
+        <div className="space-y-2">
+          {locations.map(loc => (
+            <div key={loc.id} className={`flex items-center gap-3 p-3 rounded-lg border ${loc.isDefault ? 'border-brand-500/30 bg-brand-500/5' : 'border-navy-800 bg-navy-900/50'}`}>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-white">{loc.name}</span>
+                  {loc.isDefault && <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-400 font-semibold">Predeterminado</span>}
+                </div>
+                <div className="text-xs text-gray-500 truncate mt-0.5">{loc.address}</div>
+                <div className="text-xs mt-0.5">
+                  {loc.lat && loc.lng ? (
+                    <span className="text-emerald-400">Geocodificado</span>
+                  ) : (
+                    <span className="text-amber-400">Sin geocodificar</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                {!loc.isDefault && (
+                  <button onClick={() => handleSetDefault(loc.id)} className="p-1.5 rounded hover:bg-navy-800 text-gray-400 hover:text-amber-400 transition-colors" title="Marcar como predeterminado">
+                    <Star size={16} />
+                  </button>
+                )}
+                {loc.isDefault && <Star size={16} className="text-amber-400 mx-1.5" />}
+                <button onClick={() => handleDelete(loc.id)} className="p-1.5 rounded hover:bg-navy-800 text-gray-400 hover:text-red-400 transition-colors" title="Eliminar">
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

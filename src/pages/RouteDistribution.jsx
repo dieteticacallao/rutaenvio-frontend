@@ -11,21 +11,33 @@ export default function RouteDistribution() {
   const [selectedDrivers, setSelectedDrivers] = useState([])
   const [distribution, setDistribution] = useState(null)
   const [confirmedRoutes, setConfirmedRoutes] = useState(null)
+  const [locations, setLocations] = useState([])
+  const [selectedLocationId, setSelectedLocationId] = useState('')
   const [loading, setLoading] = useState(true)
   const [distributing, setDistributing] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef([])
+  const originMarkerRef = useRef(null)
 
   useEffect(() => {
     Promise.all([
       api.get('/orders/unassigned'),
-      api.get('/drivers')
-    ]).then(([ordRes, drvRes]) => {
+      api.get('/drivers'),
+      api.get('/dashboard/locations')
+    ]).then(([ordRes, drvRes, locRes]) => {
       setOrders(ordRes.data)
       setDrivers(drvRes.data.filter(d => d.isActive))
       setSelectedOrders(ordRes.data.map(o => o.id))
+      const locs = locRes.data
+      setLocations(locs)
+      if (locs.length === 1) {
+        setSelectedLocationId(locs[0].id)
+      } else {
+        const def = locs.find(l => l.isDefault)
+        if (def) setSelectedLocationId(def.id)
+      }
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
@@ -58,6 +70,24 @@ export default function RouteDistribution() {
       setTimeout(() => mapInstance.current?.invalidateSize(), 200)
     }
   }, [step])
+
+  // Update origin marker on map
+  useEffect(() => {
+    if (!mapInstance.current) return
+    const L = window.L
+    if (originMarkerRef.current) { originMarkerRef.current.remove(); originMarkerRef.current = null }
+
+    const loc = locations.find(l => l.id === selectedLocationId)
+    if (loc && loc.lat && loc.lng) {
+      originMarkerRef.current = L.marker([loc.lat, loc.lng], {
+        icon: L.divIcon({
+          className: '',
+          html: '<div style="width:32px;height:32px;background:#ef4444;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;box-shadow:0 0 10px #ef444480">O</div>'
+        })
+      }).bindPopup(`<b>Origen: ${loc.name}</b><br>${loc.address}`)
+      originMarkerRef.current.addTo(mapInstance.current)
+    }
+  }, [selectedLocationId, locations, step])
 
   // Update map markers
   useEffect(() => {
@@ -125,10 +155,9 @@ export default function RouteDistribution() {
 
     setDistributing(true)
     try {
-      const { data } = await api.post('/routes/distribute', {
-        orderIds: selectedOrders,
-        driverIds: selectedDrivers
-      })
+      const body = { orderIds: selectedOrders, driverIds: selectedDrivers }
+      if (selectedLocationId) body.locationId = selectedLocationId
+      const { data } = await api.post('/routes/distribute', body)
       setDistribution(data)
       setStep(2)
       toast.success(`${data.totalOrders} pedidos distribuidos en ${data.totalDrivers} rutas`)
@@ -259,6 +288,27 @@ export default function RouteDistribution() {
                 ))}
               </div>
             </div>
+
+            {/* Punto de origen */}
+            {locations.length > 0 && (
+              <div className="card-p">
+                <h3 className="font-semibold text-white flex items-center gap-2 mb-3">
+                  <MapPin size={16} className="text-red-400" /> Punto de origen
+                </h3>
+                <select
+                  className="input w-full"
+                  value={selectedLocationId}
+                  onChange={e => setSelectedLocationId(e.target.value)}
+                >
+                  <option value="">Seleccionar punto de origen</option>
+                  {locations.map(loc => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name} — {loc.address} {loc.isDefault ? '(predeterminado)' : ''} {!loc.lat ? '(sin geocodificar)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Distribute button */}
             <button onClick={handleDistribute} disabled={distributing || selectedOrders.length === 0 || selectedDrivers.length === 0}
