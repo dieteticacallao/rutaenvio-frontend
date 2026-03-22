@@ -155,6 +155,31 @@ function OrderModal({ order, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
 
+  const autoDetectProvince = (cp) => {
+    if (!cp) return
+    const n = parseInt(cp, 10)
+    if (isNaN(n)) return
+    const first = cp.charAt(0)
+    let province = null
+    if (first === '1' && n < 1300) province = 'CABA'
+    else if (first === '1') province = 'Buenos Aires'
+    else if (first === '2') province = 'Santa Fe'
+    else if (first === '3') province = 'Entre Rios'
+    else if (first === '4') province = 'Tucuman'
+    else if (first === '5') province = 'Cordoba'
+    else if (first === '6') province = 'La Pampa'
+    else if (first === '7') province = 'Neuquen'
+    else if (first === '8') province = 'Chubut'
+    else if (first === '9') province = 'Tierra del Fuego'
+    if (province) setForm(f => ({ ...f, province }))
+  }
+
+  const handleZipChange = (e) => {
+    const val = e.target.value
+    setForm(f => ({ ...f, zipCode: val }))
+    autoDetectProvince(val)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.zipCode.trim()) {
@@ -204,7 +229,7 @@ function OrderModal({ order, onClose, onSaved }) {
               ))}
             </select>
           </div>
-          <div><label className="label">Codigo Postal *</label><input className="input" placeholder="1407" value={form.zipCode} onChange={set('zipCode')} required /></div>
+          <div><label className="label">Codigo Postal *</label><input className="input" placeholder="1407" value={form.zipCode} onChange={handleZipChange} required /></div>
         </div>
         <div><label className="label">Notas</label><input className="input" placeholder="Tocar timbre 2B" value={form.notes} onChange={set('notes')} /></div>
 
