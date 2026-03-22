@@ -56,7 +56,7 @@ export default function Settings() {
 function BusinessInfoSection({ settings }) {
   const [form, setForm] = useState({
     name: settings?.name || '', phone: settings?.phone || '',
-    address: settings?.address || ''
+    address: settings?.address || '', country: settings?.country || 'Argentina'
   })
   const [saving, setSaving] = useState(false)
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
@@ -81,6 +81,7 @@ function BusinessInfoSection({ settings }) {
         <div><label className="label">Teléfono</label><input className="input" value={form.phone} onChange={set('phone')} /></div>
       </div>
       <div><label className="label">Dirección (punto de partida de rutas)</label><input className="input" placeholder="Dirección de tu depósito o local" value={form.address} onChange={set('address')} /></div>
+      <div><label className="label">País</label><input className="input" value={form.country} onChange={set('country')} /></div>
       <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : 'Guardar'}</button>
     </form>
   )
@@ -90,7 +91,7 @@ function LocationsSection() {
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', address: '' })
+  const [form, setForm] = useState({ name: '', address: '', zipCode: '' })
   const [saving, setSaving] = useState(false)
 
   const loadLocations = () => {
@@ -105,7 +106,7 @@ function LocationsSection() {
     try {
       await api.post('/dashboard/locations', form)
       toast.success('Punto de origen agregado')
-      setForm({ name: '', address: '' })
+      setForm({ name: '', address: '', zipCode: '' })
       setShowForm(false)
       loadLocations()
     } catch (err) {
@@ -149,9 +150,10 @@ function LocationsSection() {
 
       {showForm && (
         <form onSubmit={handleAdd} className="space-y-3 pt-3 border-t border-navy-800">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div><label className="label">Nombre</label><input className="input" placeholder="Ej: Deposito Central" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required /></div>
             <div><label className="label">Direccion</label><input className="input" placeholder="Av. Corrientes 1234, CABA" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} required /></div>
+            <div><label className="label">Codigo Postal</label><input className="input" placeholder="1407" value={form.zipCode} onChange={e => setForm(f => ({ ...f, zipCode: e.target.value }))} /></div>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancelar</button>

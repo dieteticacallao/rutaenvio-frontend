@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api, STATUS_MAP } from '../lib/store'
-import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2 } from 'lucide-react'
+import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Orders() {
@@ -9,6 +9,7 @@ export default function Orders() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState({ status: '', page: 1 })
   const [showCreate, setShowCreate] = useState(false)
+  const [editingOrder, setEditingOrder] = useState(null)
   const [importing, setImporting] = useState(false)
 
   const loadOrders = () => {
@@ -114,7 +115,10 @@ export default function Orders() {
                   </span>
                 </td>
                 <td className="p-3 text-gray-400">{order.driver?.name || '—'}</td>
-                <td className="p-3 pr-4 text-right">
+                <td className="p-3 pr-4 text-right flex items-center justify-end gap-1">
+                  <button onClick={() => setEditingOrder(order)} className="text-gray-500 hover:text-brand-400 transition-colors" title="Editar pedido">
+                    <Pencil size={16} />
+                  </button>
                   <button onClick={() => deleteOrder(order.id)} className="text-gray-500 hover:text-red-400 transition-colors" title="Eliminar pedido">
                     <Trash2 size={16} />
                   </button>
@@ -135,15 +139,18 @@ export default function Orders() {
       )}
 
       {/* Create Order Modal */}
-      {showCreate && <CreateOrderModal onClose={() => setShowCreate(false)} onCreated={loadOrders} />}
+      {showCreate && <OrderModal onClose={() => setShowCreate(false)} onSaved={loadOrders} />}
+      {editingOrder && <OrderModal order={editingOrder} onClose={() => setEditingOrder(null)} onSaved={loadOrders} />}
     </div>
   )
 }
 
-function CreateOrderModal({ onClose, onCreated }) {
+function OrderModal({ order, onClose, onSaved }) {
+  const isEdit = !!order
   const [form, setForm] = useState({
-    customerName: '', customerPhone: '', address: '', addressDetail: '', city: '',
-    zipCode: '', notes: ''
+    customerName: order?.customerName || '', customerPhone: order?.customerPhone || '',
+    address: order?.address || '', addressDetail: order?.addressDetail || '',
+    city: order?.city || '', zipCode: order?.zipCode || '', notes: order?.notes || ''
   })
   const [saving, setSaving] = useState(false)
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
@@ -152,12 +159,17 @@ function CreateOrderModal({ onClose, onCreated }) {
     e.preventDefault()
     setSaving(true)
     try {
-      await api.post('/orders', { ...form })
-      toast.success('Pedido creado')
-      onCreated()
+      if (isEdit) {
+        await api.put(`/orders/${order.id}`, form)
+        toast.success('Pedido actualizado')
+      } else {
+        await api.post('/orders', form)
+        toast.success('Pedido creado')
+      }
+      onSaved()
       onClose()
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Error al crear')
+      toast.error(err.response?.data?.error || (isEdit ? 'Error al actualizar' : 'Error al crear'))
     }
     setSaving(false)
   }
@@ -166,25 +178,25 @@ function CreateOrderModal({ onClose, onCreated }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <form onClick={e => e.stopPropagation()} onSubmit={handleSubmit} className="card-p w-full max-w-lg space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white">Nuevo pedido</h2>
+          <h2 className="text-lg font-bold text-white">{isEdit ? 'Editar pedido' : 'Nuevo pedido'}</h2>
           <button type="button" onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div><label className="label">Nombre cliente *</label><input className="input" value={form.customerName} onChange={set('customerName')} required /></div>
-          <div><label className="label">Teléfono</label><input className="input" value={form.customerPhone} onChange={set('customerPhone')} /></div>
+          <div><label className="label">Telefono</label><input className="input" value={form.customerPhone} onChange={set('customerPhone')} /></div>
         </div>
-        <div><label className="label">Dirección *</label><input className="input" placeholder="Av. Corrientes 1234" value={form.address} onChange={set('address')} required /></div>
+        <div><label className="label">Direccion *</label><input className="input" placeholder="Av. Corrientes 1234" value={form.address} onChange={set('address')} required /></div>
         <div className="grid grid-cols-3 gap-3">
-          <div><label className="label">Depto/piso</label><input className="input" placeholder="3° B" value={form.addressDetail} onChange={set('addressDetail')} /></div>
-          <div><label className="label">Ciudad</label><input className="input" placeholder="CABA" value={form.city} onChange={set('city')} /></div>
+          <div><label className="label">Depto/piso</label><input className="input" placeholder="3ro B" value={form.addressDetail} onChange={set('addressDetail')} /></div>
+          <div><label className="label">Ciudad</label><input className="input" value={form.city} onChange={set('city')} /></div>
           <div><label className="label">Codigo Postal</label><input className="input" placeholder="1407" value={form.zipCode} onChange={set('zipCode')} /></div>
         </div>
         <div><label className="label">Notas</label><input className="input" placeholder="Tocar timbre 2B" value={form.notes} onChange={set('notes')} /></div>
 
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
-          <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Creando...' : 'Crear pedido'}</button>
+          <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : (isEdit ? 'Guardar cambios' : 'Crear pedido')}</button>
         </div>
       </form>
     </div>
