@@ -8,6 +8,7 @@ import Orders from './pages/Orders'
 import RouteDistribution from './pages/RouteDistribution'
 import Drivers from './pages/Drivers'
 import Settings from './pages/Settings'
+import OrderDetail from './pages/OrderDetail'
 import TrackingPage from './pages/TrackingPage'
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/orders" element={<Orders />} />
+        <Route path="/orders/:id" element={<OrderDetail />} />
         <Route path="/routes" element={<RouteDistribution />} />
         <Route path="/drivers" element={<Drivers />} />
         <Route path="/settings" element={<Settings />} />

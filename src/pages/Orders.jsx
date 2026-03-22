@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP } from '../lib/store'
-import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil } from 'lucide-react'
+import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Orders() {
+  const navigate = useNavigate()
   const [orders, setOrders] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -12,23 +14,32 @@ export default function Orders() {
   const [editingOrder, setEditingOrder] = useState(null)
   const [importing, setImporting] = useState(false)
 
-  const loadOrders = () => {
+  const loadOrders = useCallback(() => {
     setLoading(true)
     const params = { page: filter.page, limit: 30 }
     if (filter.status) params.status = filter.status
     api.get('/orders', { params }).then(r => {
       setOrders(r.data.orders); setTotal(r.data.total); setLoading(false)
     }).catch(() => setLoading(false))
-  }
+  }, [filter])
 
-  useEffect(loadOrders, [filter])
+  useEffect(() => { loadOrders() }, [loadOrders])
+
+  const handleOrderSaved = (savedOrder, isEdit) => {
+    if (isEdit) {
+      setOrders(prev => prev.map(o => o.id === savedOrder.id ? { ...o, ...savedOrder } : o))
+    } else {
+      loadOrders()
+    }
+  }
 
   const deleteOrder = async (orderId) => {
     if (!window.confirm('Estas seguro de que queres eliminar este pedido?')) return
     try {
       await api.delete(`/orders/${orderId}`)
       toast.success('Pedido eliminado')
-      loadOrders()
+      setOrders(prev => prev.filter(o => o.id !== orderId))
+      setTotal(prev => prev - 1)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al eliminar')
     }
@@ -38,7 +49,7 @@ export default function Orders() {
     setImporting(true)
     try {
       const { data } = await api.post('/orders/import/tiendanube', { status: 'paid' })
-      toast.success(`${data.imported} órdenes importadas de ${data.total} encontradas`)
+      toast.success(`${data.imported} ordenes importadas de ${data.total} encontradas`)
       loadOrders()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al importar')
@@ -90,7 +101,7 @@ export default function Orders() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-500">Cargando...</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-gray-500"><Loader2 size={24} className="animate-spin inline-block mr-2" />Cargando pedidos...</td></tr>
             ) : orders.length === 0 ? (
               <tr><td colSpan={6} className="p-8 text-center text-gray-500">No hay pedidos. Importá de Tiendanube o creá uno manual.</td></tr>
             ) : orders.map(order => (
@@ -116,6 +127,9 @@ export default function Orders() {
                 </td>
                 <td className="p-3 text-gray-400">{order.driver?.name || '—'}</td>
                 <td className="p-3 pr-4 text-right flex items-center justify-end gap-1">
+                  <button onClick={() => navigate(`/orders/${order.id}`)} className="text-gray-500 hover:text-emerald-400 transition-colors" title="Ver detalle">
+                    <Eye size={16} />
+                  </button>
                   <button onClick={() => setEditingOrder(order)} className="text-gray-500 hover:text-brand-400 transition-colors" title="Editar pedido">
                     <Pencil size={16} />
                   </button>
@@ -139,8 +153,8 @@ export default function Orders() {
       )}
 
       {/* Create Order Modal */}
-      {showCreate && <OrderModal onClose={() => setShowCreate(false)} onSaved={loadOrders} />}
-      {editingOrder && <OrderModal order={editingOrder} onClose={() => setEditingOrder(null)} onSaved={loadOrders} />}
+      {showCreate && <OrderModal onClose={() => setShowCreate(false)} onSaved={handleOrderSaved} />}
+      {editingOrder && <OrderModal order={editingOrder} onClose={() => setEditingOrder(null)} onSaved={handleOrderSaved} />}
     </div>
   )
 }
@@ -189,13 +203,14 @@ function OrderModal({ order, onClose, onSaved }) {
     setSaving(true)
     try {
       if (isEdit) {
-        await api.put(`/orders/${order.id}`, form)
+        const { data } = await api.put(`/orders/${order.id}`, form)
         toast.success('Pedido actualizado')
+        onSaved(data, true)
       } else {
-        await api.post('/orders', form)
+        const { data } = await api.post('/orders', form)
         toast.success('Pedido creado')
+        onSaved(data, false)
       }
-      onSaved()
       onClose()
     } catch (err) {
       toast.error(err.response?.data?.error || (isEdit ? 'Error al actualizar' : 'Error al crear'))
