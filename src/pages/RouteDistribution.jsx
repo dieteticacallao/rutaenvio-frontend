@@ -30,7 +30,7 @@ export default function RouteDistribution() {
     }).catch(() => setLoading(false))
   }, [])
 
-  // Initialize map
+  // Initialize map once
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return
     const L = window.L
@@ -47,7 +47,14 @@ export default function RouteDistribution() {
     }).addTo(mapInstance.current)
 
     return () => { if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null } }
-  }, [step]) // Re-init when step changes to ensure map is ready
+  }, [])
+
+  // Ensure map recalculates size when step changes
+  useEffect(() => {
+    if (mapInstance.current) {
+      setTimeout(() => mapInstance.current?.invalidateSize(), 200)
+    }
+  }, [step])
 
   // Update map markers
   useEffect(() => {
