@@ -157,6 +157,10 @@ function OrderModal({ order, onClose, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!form.zipCode.trim()) {
+      toast.error('El codigo postal es obligatorio')
+      return
+    }
     setSaving(true)
     try {
       if (isEdit) {
@@ -190,7 +194,7 @@ function OrderModal({ order, onClose, onSaved }) {
         <div className="grid grid-cols-3 gap-3">
           <div><label className="label">Depto/piso</label><input className="input" placeholder="3ro B" value={form.addressDetail} onChange={set('addressDetail')} /></div>
           <div><label className="label">Ciudad</label><input className="input" value={form.city} onChange={set('city')} /></div>
-          <div><label className="label">Codigo Postal</label><input className="input" placeholder="1407" value={form.zipCode} onChange={set('zipCode')} /></div>
+          <div><label className="label">Codigo Postal *</label><input className="input" placeholder="1407" value={form.zipCode} onChange={set('zipCode')} required /></div>
         </div>
         <div><label className="label">Notas</label><input className="input" placeholder="Tocar timbre 2B" value={form.notes} onChange={set('notes')} /></div>
 
