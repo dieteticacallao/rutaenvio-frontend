@@ -458,23 +458,41 @@ export default function RouteDistribution() {
                     El cadete escanea este QR desde la app para cargar su ruta
                   </p>
                   {routeLink && (
-                    <div className="flex gap-2 mt-3 justify-center">
-                      <button
-                        onClick={() => { navigator.clipboard.writeText(routeLink); toast.success('Link copiado') }}
-                        className="btn-secondary text-xs"
-                      >
-                        <Copy size={14} /> Copiar link
-                      </button>
-                      {route.driverPhone && (
-                        <a
-                          href={`https://wa.me/${route.driverPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola! Aca tenes tu ruta de hoy: ${routeLink}`)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn-secondary text-xs inline-flex items-center gap-1.5"
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center gap-1.5 bg-navy-900 border border-navy-700 rounded-lg px-3 py-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={routeLink}
+                          className="flex-1 bg-transparent text-xs text-brand-300 outline-none truncate"
+                          onClick={e => e.target.select()}
+                        />
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(routeLink); toast.success('Link copiado') }}
+                          className="text-gray-400 hover:text-brand-400 transition-colors flex-shrink-0"
+                          title="Copiar link"
                         >
-                          <MessageCircle size={14} /> Enviar por WhatsApp
-                        </a>
-                      )}
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                      <div className="flex gap-2 justify-center">
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(routeLink); toast.success('Link copiado') }}
+                          className="btn-secondary text-xs"
+                        >
+                          <Copy size={14} /> Copiar link
+                        </button>
+                        {route.driverPhone && (
+                          <a
+                            href={`https://wa.me/${route.driverPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola! Aca tenes tu ruta de hoy: ${routeLink}`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-secondary text-xs inline-flex items-center gap-1.5"
+                          >
+                            <MessageCircle size={14} /> Enviar por WhatsApp
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
