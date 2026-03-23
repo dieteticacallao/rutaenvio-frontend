@@ -1,132 +1,105 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { io } from 'socket.io-client'
+import { Package, Clock, Truck, CheckCircle2, Loader2, MapPin, User, Hash, AlertCircle, X } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || '/api'
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || window.location.origin
 
-const STATUS_STEPS = [
-  { key: 'PENDING', label: 'Pedido recibido', icon: '📦' },
-  { key: 'ASSIGNED', label: 'Cadete asignado', icon: '👤' },
-  { key: 'PICKED_UP', label: 'En preparación', icon: '📋' },
-  { key: 'IN_TRANSIT', label: 'En camino', icon: '🛵' },
-  { key: 'DELIVERED', label: 'Entregado', icon: '✅' },
+const STEPS = [
+  { key: 'PENDING', label: 'Preparando', icon: Clock },
+  { key: 'ASSIGNED', label: 'Asignado', icon: Truck },
+  { key: 'IN_TRANSIT', label: 'En camino', icon: Truck },
+  { key: 'DELIVERED', label: 'Entregado', icon: CheckCircle2 },
 ]
 
-const STATUS_INDEX = { PENDING: 0, ASSIGNED: 1, PICKED_UP: 2, IN_TRANSIT: 3, ARRIVED: 3, DELIVERED: 4, FAILED: -1, CANCELLED: -1 }
+const STATUS_INDEX = { PENDING: 0, ASSIGNED: 1, PICKED_UP: 1, IN_TRANSIT: 2, ARRIVED: 2, DELIVERED: 3, FAILED: -1, CANCELLED: -1 }
 
 export default function TrackingPage() {
   const { trackingCode } = useParams()
   const [order, setOrder] = useState(null)
   const [error, setError] = useState(null)
-  const [driverPos, setDriverPos] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [prevStatus, setPrevStatus] = useState(null)
+  const [animating, setAnimating] = useState(false)
   const [rating, setRating] = useState(0)
   const [feedback, setFeedback] = useState('')
   const [ratingSubmitted, setRatingSubmitted] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
+  const [submittingRating, setSubmittingRating] = useState(false)
+  const [photoModal, setPhotoModal] = useState(false)
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
-  const driverMarker = useRef(null)
   const destMarker = useRef(null)
+  const intervalRef = useRef(null)
 
-  // Fetch order data
-  useEffect(() => {
-    if (!trackingCode) return
-    fetch(`${API}/tracking/${trackingCode}`)
-      .then(r => { if (!r.ok) throw new Error('not found'); return r.json() })
-      .then(data => {
-        setOrder(data)
-        setRatingSubmitted(!!data.customerRating)
-        if (data.driver?.lastLat) {
-          setDriverPos({ lat: data.driver.lastLat, lng: data.driver.lastLng })
+  const fetchOrder = useCallback(async () => {
+    try {
+      const r = await fetch(`${API}/tracking/${trackingCode}`)
+      if (!r.ok) throw new Error('not found')
+      const data = await r.json()
+      setOrder(prev => {
+        if (prev && prev.status !== data.status) {
+          setPrevStatus(prev.status)
+          setAnimating(true)
+          setTimeout(() => setAnimating(false), 600)
         }
+        return data
       })
-      .catch(() => setError('Envío no encontrado'))
+      setRatingSubmitted(!!data.customerRating)
+    } catch {
+      setError('Envio no encontrado')
+    } finally {
+      setLoading(false)
+    }
   }, [trackingCode])
 
-  // Socket.IO for real-time updates
+  // Initial fetch
   useEffect(() => {
-    if (!trackingCode || !order) return
-    const socket = io(SOCKET_URL, { transports: ['websocket'] })
+    if (trackingCode) fetchOrder()
+  }, [trackingCode, fetchOrder])
 
-    socket.on('connect', () => {
-      socket.emit('tracking:join', { trackingCode })
-    })
-
-    socket.on('driver:moved', (data) => {
-      setDriverPos({ lat: data.lat, lng: data.lng })
-    })
-
-    socket.on('order:status', (data) => {
-      setOrder(prev => prev ? { ...prev, status: data.status } : prev)
-    })
-
-    return () => socket.disconnect()
-  }, [trackingCode, order?.id])
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    if (!trackingCode || error) return
+    intervalRef.current = setInterval(() => {
+      fetchOrder()
+    }, 30000)
+    return () => clearInterval(intervalRef.current)
+  }, [trackingCode, error, fetchOrder])
 
   // Initialize map
   useEffect(() => {
-    if (!mapRef.current || mapInstance.current || !order) return
-    if (typeof window === 'undefined' || !window.L) return
-
+    if (!order || !mapRef.current || mapInstance.current) return
     const L = window.L
-    const center = order.lat && order.lng ? [order.lat, order.lng] : [-34.6037, -58.3816]
+    if (!L) return
+    if (!order.lat || !order.lng) return
 
     mapInstance.current = L.map(mapRef.current, {
-      center,
-      zoom: 14,
+      center: [order.lat, order.lng],
+      zoom: 15,
       zoomControl: false,
-      attributionControl: false
+      attributionControl: false,
+      dragging: true,
+      scrollWheelZoom: false
     })
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapInstance.current)
+    L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(mapInstance.current)
 
-    // Destination marker
-    if (order.lat && order.lng) {
-      destMarker.current = L.marker([order.lat, order.lng], {
-        icon: L.divIcon({
-          className: '',
-          html: `<div style="width:36px;height:36px;background:#10b981;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 12px rgba(16,185,129,0.4)">📍</div>`,
-          iconSize: [36, 36],
-          iconAnchor: [18, 18]
-        })
-      }).addTo(mapInstance.current)
+    destMarker.current = L.marker([order.lat, order.lng], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="width:36px;height:36px;background:#3b82f6;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(59,130,246,0.4)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></div>',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
+      })
+    }).addTo(mapInstance.current)
+
+    return () => {
+      if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null }
     }
-
-    return () => { if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null } }
-  }, [order])
-
-  // Update driver position on map
-  useEffect(() => {
-    if (!mapInstance.current || !driverPos || !window.L) return
-    const L = window.L
-
-    if (driverMarker.current) {
-      driverMarker.current.setLatLng([driverPos.lat, driverPos.lng])
-    } else {
-      driverMarker.current = L.marker([driverPos.lat, driverPos.lng], {
-        icon: L.divIcon({
-          className: '',
-          html: `<div style="width:40px;height:40px;background:#0ea5e9;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 16px rgba(14,165,233,0.5);animation:pulse 2s infinite">🛵</div>`,
-          iconSize: [40, 40],
-          iconAnchor: [20, 20]
-        })
-      }).addTo(mapInstance.current)
-    }
-
-    // Fit both markers
-    if (destMarker.current && driverMarker.current) {
-      const bounds = L.latLngBounds([
-        driverMarker.current.getLatLng(),
-        destMarker.current.getLatLng()
-      ])
-      mapInstance.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 })
-    }
-  }, [driverPos])
+  }, [order?.id])
 
   const submitRating = async () => {
     if (!rating) return
-    setSubmitting(true)
+    setSubmittingRating(true)
     try {
       await fetch(`${API}/tracking/${trackingCode}/rate`, {
         method: 'POST',
@@ -134,247 +107,325 @@ export default function TrackingPage() {
         body: JSON.stringify({ rating, feedback })
       })
       setRatingSubmitted(true)
-    } catch (e) { console.error(e) }
-    setSubmitting(false)
+    } catch (e) {
+      console.error(e)
+    }
+    setSubmittingRating(false)
   }
 
-  if (error) {
+  // Loading state
+  if (loading) {
     return (
-      <div style={styles.errorPage}>
-        <div style={styles.errorIcon}>🔍</div>
-        <h1 style={styles.errorTitle}>Envío no encontrado</h1>
-        <p style={styles.errorText}>El código de seguimiento no existe o expiró.</p>
+      <div className="min-h-screen bg-navy-950 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 size={32} className="animate-spin text-brand-400 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">Cargando seguimiento...</p>
+        </div>
       </div>
     )
   }
 
-  if (!order) {
+  // Error state
+  if (error) {
     return (
-      <div style={styles.loadingPage}>
-        <div style={styles.spinner} />
-        <p style={styles.loadingText}>Cargando seguimiento...</p>
+      <div className="min-h-screen bg-navy-950 flex items-center justify-center px-4">
+        <div className="text-center">
+          <Package size={48} className="mx-auto text-gray-600 mb-4" />
+          <h1 className="text-xl font-bold text-white mb-2">Envio no encontrado</h1>
+          <p className="text-gray-500">El codigo de seguimiento no existe o ya expiro.</p>
+        </div>
       </div>
     )
   }
 
   const currentStep = STATUS_INDEX[order.status] ?? 0
-  const isActive = ['IN_TRANSIT', 'PICKED_UP', 'ASSIGNED'].includes(order.status)
+  const isTransit = order.status === 'IN_TRANSIT' || order.status === 'ARRIVED'
   const isDelivered = order.status === 'DELIVERED'
-  const isCancelled = ['CANCELLED', 'FAILED'].includes(order.status)
+  const isCancelled = order.status === 'CANCELLED' || order.status === 'FAILED'
+
+  // ETA calculations
+  const etaMinutes = order.estimatedMinutes || null
+  const etaBanner = etaMinutes && etaMinutes <= 60
+  const etaVeryClose = etaMinutes && etaMinutes <= 15
+
+  // ETA time range
+  const getEtaTimeRange = () => {
+    if (!etaMinutes) return null
+    const now = new Date()
+    const minTime = new Date(now.getTime() + Math.max(0, (etaMinutes - 10)) * 60000)
+    const maxTime = new Date(now.getTime() + (etaMinutes + 10) * 60000)
+    const fmt = (d) => d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+    return `${fmt(minTime)} y ${fmt(maxTime)}`
+  }
 
   return (
-    <div style={styles.page}>
+    <div className="min-h-screen bg-navy-950 pb-8">
+      {/* ETA Banner */}
+      {isTransit && etaBanner && (
+        <div className={`px-4 py-3 text-center text-sm font-semibold ${etaVeryClose ? 'bg-emerald-600/20 text-emerald-300 border-b border-emerald-500/30' : 'bg-blue-600/20 text-blue-300 border-b border-blue-500/30'}`}>
+          {etaVeryClose
+            ? 'Tu repartidor esta muy cerca!'
+            : `Tu pedido llega en aproximadamente ${etaMinutes} minutos`
+          }
+        </div>
+      )}
+
       {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.headerInner}>
-          <div style={styles.businessName}>{order.business?.name || 'RutaEnvio'}</div>
-          <div style={styles.orderNumber}>Pedido {order.orderNumber}</div>
-        </div>
-      </div>
-
-      {/* Map (only show when driver is active) */}
-      {isActive && (
-        <div style={styles.mapContainer}>
-          <div ref={mapRef} style={styles.map} />
-          {driverPos && order.driver?.name && (
-            <div style={styles.driverBadge}>
-              <span style={styles.driverDot} /> {order.driver.name} en camino
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Delivered hero */}
-      {isDelivered && (
-        <div style={styles.deliveredHero}>
-          <div style={styles.deliveredIcon}>✅</div>
-          <h2 style={styles.deliveredTitle}>Entregado</h2>
-          {order.receiverName && <p style={styles.deliveredSub}>Recibido por {order.receiverName}</p>}
-          {order.deliveredAt && <p style={styles.deliveredTime}>{new Date(order.deliveredAt).toLocaleString('es-AR')}</p>}
-        </div>
-      )}
-
-      {/* Cancelled */}
-      {isCancelled && (
-        <div style={styles.cancelledHero}>
-          <div style={styles.cancelledIcon}>❌</div>
-          <h2 style={styles.cancelledTitle}>{order.status === 'CANCELLED' ? 'Cancelado' : 'No se pudo entregar'}</h2>
-          <p style={styles.cancelledSub}>Contactá al vendedor para más información.</p>
-        </div>
-      )}
-
-      {/* Status stepper */}
-      {!isCancelled && (
-        <div style={styles.stepper}>
-          {STATUS_STEPS.map((step, i) => {
-            const done = i <= currentStep
-            const active = i === currentStep
-            return (
-              <div key={step.key} style={styles.stepRow}>
-                <div style={styles.stepLeft}>
-                  <div style={{
-                    ...styles.stepDot,
-                    background: done ? '#0ea5e9' : '#1e293b',
-                    boxShadow: active ? '0 0 0 4px rgba(14,165,233,0.2)' : 'none',
-                    transform: active ? 'scale(1.2)' : 'scale(1)',
-                  }}>
-                    <span style={{ fontSize: 14 }}>{done ? step.icon : ''}</span>
-                  </div>
-                  {i < STATUS_STEPS.length - 1 && (
-                    <div style={{ ...styles.stepLine, background: i < currentStep ? '#0ea5e9' : '#1e293b' }} />
-                  )}
-                </div>
-                <div style={styles.stepContent}>
-                  <div style={{ ...styles.stepLabel, color: done ? '#e2e8f0' : '#475569', fontWeight: active ? 700 : 400 }}>
-                    {step.label}
-                  </div>
-                  {active && isActive && (
-                    <div style={styles.stepActive}>Ahora mismo</div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* ETA */}
-      {isActive && order.estimatedMinutes && (
-        <div style={styles.etaCard}>
-          <div style={styles.etaIcon}>🕐</div>
+      <div className="bg-navy-900 border-b border-navy-800 px-4 py-4">
+        <div className="max-w-lg mx-auto flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-brand-500/20 flex items-center justify-center flex-shrink-0">
+            <Package size={18} className="text-brand-400" />
+          </div>
           <div>
-            <div style={styles.etaLabel}>Tiempo estimado</div>
-            <div style={styles.etaValue}>{order.estimatedMinutes} minutos</div>
+            <h1 className="text-base font-bold text-white">RutaEnvio</h1>
+            <p className="text-xs text-gray-500">Seguimiento de envio</p>
           </div>
         </div>
-      )}
-
-      {/* Delivery address */}
-      <div style={styles.infoCard}>
-        <div style={styles.infoLabel}>Dirección de entrega</div>
-        <div style={styles.infoValue}>{order.address}</div>
       </div>
 
-      {/* Rating (only after delivery) */}
-      {isDelivered && !ratingSubmitted && (
-        <div style={styles.ratingCard}>
-          <div style={styles.ratingTitle}>¿Cómo fue tu experiencia?</div>
-          <div style={styles.stars}>
-            {[1, 2, 3, 4, 5].map(n => (
-              <button key={n} onClick={() => setRating(n)} style={{
-                ...styles.star,
-                opacity: n <= rating ? 1 : 0.3,
-                transform: n <= rating ? 'scale(1.1)' : 'scale(1)'
-              }}>⭐</button>
-            ))}
-          </div>
-          {rating > 0 && (
+      <div className="max-w-lg mx-auto">
+
+        {/* Status Hero */}
+        <div className={`text-center px-6 py-8 transition-all duration-500 ${animating ? 'scale-105 opacity-90' : 'scale-100 opacity-100'}`}>
+          {/* PENDING */}
+          {order.status === 'PENDING' && (
             <>
-              <textarea
-                style={styles.feedbackInput}
-                placeholder="Comentario opcional..."
-                value={feedback}
-                onChange={e => setFeedback(e.target.value)}
-                rows={2}
-              />
-              <button onClick={submitRating} disabled={submitting} style={styles.ratingBtn}>
-                {submitting ? 'Enviando...' : 'Enviar calificación'}
-              </button>
+              <div className="w-20 h-20 rounded-full bg-yellow-500/15 flex items-center justify-center mx-auto mb-4">
+                <Clock size={40} className="text-yellow-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Tu pedido esta siendo preparado</h2>
+              <p className="text-sm text-gray-400">Te avisaremos cuando sea asignado a un repartidor</p>
+            </>
+          )}
+
+          {/* ASSIGNED / PICKED_UP */}
+          {(order.status === 'ASSIGNED' || order.status === 'PICKED_UP') && (
+            <>
+              <div className="w-20 h-20 rounded-full bg-blue-500/15 flex items-center justify-center mx-auto mb-4">
+                <Truck size={40} className="text-blue-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Tu pedido fue asignado a un repartidor</h2>
+              {order.driver?.name && (
+                <p className="text-sm text-gray-400">Repartidor: {order.driver.name}</p>
+              )}
+            </>
+          )}
+
+          {/* IN_TRANSIT / ARRIVED */}
+          {isTransit && (
+            <>
+              <div className="w-20 h-20 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto mb-4 animate-truck-bounce">
+                <Truck size={40} className="text-emerald-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Tu pedido esta en camino!</h2>
+              {etaMinutes && (
+                <div className="mt-3">
+                  <p className="text-3xl font-bold text-emerald-400">{etaMinutes} min</p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Llega entre las {getEtaTimeRange()}
+                  </p>
+                </div>
+              )}
+              {!etaMinutes && order.driver?.name && (
+                <p className="text-sm text-gray-400">{order.driver.name} esta en camino con tu pedido</p>
+              )}
+            </>
+          )}
+
+          {/* DELIVERED */}
+          {isDelivered && (
+            <>
+              <div className="w-20 h-20 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 size={40} className="text-emerald-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Tu pedido fue entregado</h2>
+              {order.deliveredAt && (
+                <p className="text-sm text-gray-400">
+                  {new Date(order.deliveredAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })} a las {new Date(order.deliveredAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
+              {order.receiverName && (
+                <p className="text-sm text-gray-500 mt-1">Recibido por {order.receiverName}</p>
+              )}
+              {order.deliveryPhoto && (
+                <button
+                  onClick={() => setPhotoModal(true)}
+                  className="mt-4 inline-block rounded-xl overflow-hidden border-2 border-navy-800 hover:border-brand-500 transition-colors"
+                >
+                  <img src={order.deliveryPhoto} alt="Foto de entrega" className="w-48 h-36 object-cover" />
+                </button>
+              )}
+            </>
+          )}
+
+          {/* CANCELLED / FAILED */}
+          {isCancelled && (
+            <>
+              <div className="w-20 h-20 rounded-full bg-red-500/15 flex items-center justify-center mx-auto mb-4">
+                <AlertCircle size={40} className="text-red-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">
+                {order.status === 'CANCELLED' ? 'Pedido cancelado' : 'No se pudo entregar'}
+              </h2>
+              <p className="text-sm text-gray-400">Contacta al vendedor para mas informacion.</p>
             </>
           )}
         </div>
-      )}
 
-      {ratingSubmitted && isDelivered && (
-        <div style={styles.ratingDone}>
-          <span>⭐</span> Gracias por tu calificación
+        {/* Timeline Progress Bar */}
+        {!isCancelled && (
+          <div className="px-5 pb-6">
+            <div className="flex items-center justify-between relative">
+              {/* Background line */}
+              <div className="absolute top-4 left-4 right-4 h-0.5 bg-navy-800" />
+              {/* Active line */}
+              <div
+                className="absolute top-4 left-4 h-0.5 bg-brand-400 transition-all duration-700 ease-out"
+                style={{ width: `${currentStep >= 0 ? (currentStep / (STEPS.length - 1)) * (100 - (100 / (STEPS.length))) : 0}%` }}
+              />
+
+              {STEPS.map((step, i) => {
+                const done = i <= currentStep && currentStep >= 0
+                const active = i === currentStep
+                const StepIcon = step.icon
+                return (
+                  <div key={step.key} className="flex flex-col items-center relative z-10" style={{ flex: '1 1 0' }}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${
+                      done
+                        ? active
+                          ? 'bg-brand-500 ring-4 ring-brand-500/20'
+                          : 'bg-brand-500'
+                        : 'bg-navy-800'
+                    }`}>
+                      <StepIcon size={14} className={done ? 'text-white' : 'text-gray-600'} />
+                    </div>
+                    <span className={`text-[10px] mt-1.5 text-center leading-tight ${
+                      done ? (active ? 'text-brand-400 font-semibold' : 'text-gray-300') : 'text-gray-600'
+                    }`}>
+                      {step.label}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Map (IN_TRANSIT only) */}
+        {isTransit && order.lat && order.lng && (
+          <div className="mx-4 mb-4 rounded-xl overflow-hidden border border-navy-800" style={{ height: '200px' }}>
+            <div ref={mapRef} className="w-full h-full" />
+          </div>
+        )}
+
+        {/* Order Info */}
+        <div className="mx-4 mb-4 bg-navy-900 rounded-xl border border-navy-800 p-4 space-y-3">
+          {order.customerName && (
+            <div className="flex items-center gap-3">
+              <User size={15} className="text-gray-500 flex-shrink-0" />
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-wider">Cliente</p>
+                <p className="text-sm text-white">{order.customerName}</p>
+              </div>
+            </div>
+          )}
+          <div className="flex items-start gap-3">
+            <MapPin size={15} className="text-gray-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[10px] text-gray-600 uppercase tracking-wider">Direccion</p>
+              <p className="text-sm text-white">
+                {order.address}
+                {order.city ? `, ${order.city}` : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Hash size={15} className="text-gray-500 flex-shrink-0" />
+            <div>
+              <p className="text-[10px] text-gray-600 uppercase tracking-wider">Numero de pedido</p>
+              <p className="text-sm text-white font-mono">{order.orderNumber}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Rating (after delivery) */}
+        {isDelivered && !ratingSubmitted && (
+          <div className="mx-4 mb-4 bg-navy-900 rounded-xl border border-navy-800 p-5 text-center">
+            <p className="text-sm font-semibold text-white mb-3">Como fue tu experiencia?</p>
+            <div className="flex justify-center gap-2 mb-3">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button
+                  key={n}
+                  onClick={() => setRating(n)}
+                  className={`w-10 h-10 rounded-full text-lg transition-all ${
+                    n <= rating
+                      ? 'bg-yellow-500/20 text-yellow-400 scale-110'
+                      : 'bg-navy-800 text-gray-600'
+                  }`}
+                >
+                  {n <= rating ? '\u2605' : '\u2606'}
+                </button>
+              ))}
+            </div>
+            {rating > 0 && (
+              <>
+                <textarea
+                  value={feedback}
+                  onChange={e => setFeedback(e.target.value)}
+                  placeholder="Comentario opcional..."
+                  rows={2}
+                  className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 mb-3 resize-none"
+                />
+                <button
+                  onClick={submitRating}
+                  disabled={submittingRating}
+                  className="w-full py-2.5 rounded-xl bg-brand-500 text-white font-semibold text-sm hover:bg-brand-600 transition-colors disabled:opacity-50"
+                >
+                  {submittingRating ? 'Enviando...' : 'Enviar calificacion'}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {isDelivered && ratingSubmitted && (
+          <div className="mx-4 mb-4 text-center text-sm text-gray-500 py-3">
+            Gracias por tu calificacion
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="text-center text-xs text-gray-700 mt-6 pb-4">
+          Seguimiento por <span className="text-brand-400 font-semibold">RutaEnvio</span>
+        </div>
+      </div>
+
+      {/* Photo Modal */}
+      {photoModal && order.deliveryPhoto && (
+        <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setPhotoModal(false)}>
+          <div className="relative max-w-sm w-full">
+            <button
+              onClick={() => setPhotoModal(false)}
+              className="absolute -top-10 right-0 text-white/70 hover:text-white"
+            >
+              <X size={24} />
+            </button>
+            <img src={order.deliveryPhoto} alt="Foto de entrega" className="w-full rounded-xl" />
+          </div>
         </div>
       )}
 
-      {/* Footer */}
-      <div style={styles.footer}>
-        Seguimiento por <span style={{ color: '#0ea5e9', fontWeight: 600 }}>RutaEnvio</span>
-      </div>
-
       <style>{`
-        @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(14,165,233,0.4)} 50%{box-shadow:0 0 0 12px rgba(14,165,233,0)} }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #0b1120; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
         .leaflet-container { background: #111829 !important; }
-        .leaflet-tile-pane { filter: saturate(0.3) brightness(0.65); }
         .leaflet-control-attribution { display: none !important; }
+        @keyframes truck-bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-6px); }
+        }
+        .animate-truck-bounce {
+          animation: truck-bounce 1.5s ease-in-out infinite;
+        }
       `}</style>
     </div>
   )
-}
-
-const styles = {
-  page: { maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: '#0b1120', color: '#e2e8f0' },
-
-  // Header
-  header: { background: 'linear-gradient(180deg, #111829 0%, #0b1120 100%)', padding: '20px 20px 16px', borderBottom: '1px solid #1e293b' },
-  headerInner: {},
-  businessName: { fontSize: 18, fontWeight: 700, color: '#fff' },
-  orderNumber: { fontSize: 13, color: '#64748b', marginTop: 2 },
-
-  // Map
-  mapContainer: { position: 'relative', height: 260, margin: '0' },
-  map: { width: '100%', height: '100%' },
-  driverBadge: { position: 'absolute', bottom: 12, left: 12, right: 12, background: 'rgba(17,24,41,0.92)', backdropFilter: 'blur(8px)', borderRadius: 12, padding: '10px 14px', fontSize: 14, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 8, zIndex: 1000 },
-  driverDot: { width: 8, height: 8, borderRadius: 4, background: '#0ea5e9', display: 'inline-block', animation: 'pulse 2s infinite' },
-
-  // Delivered hero
-  deliveredHero: { textAlign: 'center', padding: '32px 20px 24px' },
-  deliveredIcon: { fontSize: 48, marginBottom: 8 },
-  deliveredTitle: { fontSize: 24, fontWeight: 700, color: '#10b981' },
-  deliveredSub: { fontSize: 14, color: '#94a3b8', marginTop: 4 },
-  deliveredTime: { fontSize: 12, color: '#475569', marginTop: 4 },
-
-  // Cancelled
-  cancelledHero: { textAlign: 'center', padding: '32px 20px 24px' },
-  cancelledIcon: { fontSize: 48, marginBottom: 8 },
-  cancelledTitle: { fontSize: 24, fontWeight: 700, color: '#ef4444' },
-  cancelledSub: { fontSize: 14, color: '#94a3b8', marginTop: 4 },
-
-  // Stepper
-  stepper: { padding: '24px 20px' },
-  stepRow: { display: 'flex', gap: 14 },
-  stepLeft: { display: 'flex', flexDirection: 'column', alignItems: 'center', width: 32 },
-  stepDot: { width: 32, height: 32, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.3s ease', flexShrink: 0 },
-  stepLine: { width: 2, flex: 1, minHeight: 24, transition: 'background 0.3s ease' },
-  stepContent: { paddingBottom: 20, flex: 1 },
-  stepLabel: { fontSize: 15, transition: 'all 0.2s ease' },
-  stepActive: { fontSize: 12, color: '#0ea5e9', fontWeight: 600, marginTop: 2 },
-
-  // ETA
-  etaCard: { margin: '0 20px 16px', background: '#111829', border: '1px solid #1e293b', borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 },
-  etaIcon: { fontSize: 24 },
-  etaLabel: { fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 },
-  etaValue: { fontSize: 18, fontWeight: 700, color: '#fff' },
-
-  // Info card
-  infoCard: { margin: '0 20px 16px', background: '#111829', border: '1px solid #1e293b', borderRadius: 14, padding: '14px 16px' },
-  infoLabel: { fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
-  infoValue: { fontSize: 15, color: '#e2e8f0', lineHeight: 1.4 },
-
-  // Rating
-  ratingCard: { margin: '0 20px 16px', background: '#111829', border: '1px solid #1e293b', borderRadius: 14, padding: '20px', textAlign: 'center' },
-  ratingTitle: { fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 12 },
-  stars: { display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 },
-  star: { fontSize: 32, background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.15s ease', padding: 0 },
-  feedbackInput: { width: '100%', background: '#0b1120', border: '1px solid #1e293b', borderRadius: 10, padding: '10px 12px', color: '#e2e8f0', fontSize: 14, resize: 'none', outline: 'none', fontFamily: 'inherit', marginBottom: 12 },
-  ratingBtn: { background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%' },
-  ratingDone: { margin: '0 20px 16px', textAlign: 'center', fontSize: 14, color: '#64748b', padding: 16 },
-
-  // Footer
-  footer: { textAlign: 'center', padding: '24px 20px 40px', fontSize: 12, color: '#334155' },
-
-  // Loading & Error
-  loadingPage: { minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0b1120' },
-  spinner: { width: 32, height: 32, border: '3px solid #1e293b', borderTopColor: '#0ea5e9', borderRadius: '50%', animation: 'spin 0.8s linear infinite', marginBottom: 12 },
-  loadingText: { color: '#64748b', fontSize: 14 },
-  errorPage: { minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0b1120', padding: 32 },
-  errorIcon: { fontSize: 48, marginBottom: 12 },
-  errorTitle: { fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 8 },
-  errorText: { fontSize: 14, color: '#64748b', textAlign: 'center' },
 }
