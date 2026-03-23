@@ -30,6 +30,8 @@ export default function RouteView() {
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef({})
+  const driverMarkerRef = useRef(null)
+  const watchIdRef = useRef(null)
 
   const fetchRoute = useCallback(async () => {
     try {
@@ -102,6 +104,49 @@ export default function RouteView() {
       markersRef.current = {}
     }
   }, [route?.id])
+
+  // Geolocation: watch driver position and send to server
+  useEffect(() => {
+    if (!route || !token || !navigator.geolocation) return
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords
+        // Send location to API
+        fetch(`${API}/driver-web/${token}/location`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat: latitude, lng: longitude })
+        }).catch(() => {})
+
+        // Update driver marker on map
+        const L = window.L
+        if (!L || !mapInstance.current) return
+
+        if (driverMarkerRef.current) {
+          driverMarkerRef.current.setLatLng([latitude, longitude])
+        } else {
+          driverMarkerRef.current = L.marker([latitude, longitude], {
+            icon: L.divIcon({
+              className: '',
+              html: '<div style="width:36px;height:36px;background:#0ea5e9;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 12px rgba(14,165,233,0.5)">🏍</div>',
+              iconSize: [36, 36],
+              iconAnchor: [18, 18]
+            }),
+            zIndexOffset: 1000
+          }).addTo(mapInstance.current)
+        }
+      },
+      () => {},
+      { enableHighAccuracy: false, maximumAge: 30000 }
+    )
+
+    return () => {
+      if (watchIdRef.current != null) {
+        navigator.geolocation.clearWatch(watchIdRef.current)
+      }
+    }
+  }, [route?.id, token])
 
   function addOrderMarker(L, order, bounds) {
     if (!order.lat || !order.lng) return

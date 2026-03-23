@@ -28,6 +28,7 @@ export default function TrackingPage() {
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const destMarker = useRef(null)
+  const driverMarkerRef = useRef(null)
   const intervalRef = useRef(null)
 
   const fetchOrder = useCallback(async () => {
@@ -96,6 +97,36 @@ export default function TrackingPage() {
       if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null }
     }
   }, [order?.id])
+
+  // Update driver marker when driverLat/driverLng change
+  useEffect(() => {
+    if (!mapInstance.current || !order?.driverLat || !order?.driverLng) return
+    const L = window.L
+    if (!L) return
+
+    if (driverMarkerRef.current) {
+      driverMarkerRef.current.setLatLng([order.driverLat, order.driverLng])
+    } else {
+      driverMarkerRef.current = L.marker([order.driverLat, order.driverLng], {
+        icon: L.divIcon({
+          className: '',
+          html: '<div style="width:40px;height:40px;background:#0ea5e9;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 16px rgba(14,165,233,0.5)">🏍</div>',
+          iconSize: [40, 40],
+          iconAnchor: [20, 20]
+        }),
+        zIndexOffset: 1000
+      }).addTo(mapInstance.current)
+    }
+
+    // Fit bounds to show both markers
+    if (destMarker.current && driverMarkerRef.current) {
+      const bounds = L.latLngBounds([
+        driverMarkerRef.current.getLatLng(),
+        destMarker.current.getLatLng()
+      ])
+      mapInstance.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 })
+    }
+  }, [order?.driverLat, order?.driverLng])
 
   const submitRating = async () => {
     if (!rating) return
