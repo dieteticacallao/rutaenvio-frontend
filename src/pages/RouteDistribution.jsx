@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api, ROUTE_COLORS } from '../lib/store'
-import { Route, Users, Zap, Check, QrCode, ArrowRight, RotateCcw, Package, MapPin } from 'lucide-react'
+import { Route, Users, Zap, Check, QrCode, ArrowRight, RotateCcw, Package, MapPin, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function RouteDistribution() {
@@ -16,6 +16,8 @@ export default function RouteDistribution() {
   const [loading, setLoading] = useState(true)
   const [distributing, setDistributing] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [unassignedOrders, setUnassignedOrders] = useState([])
+  const [reassignTargets, setReassignTargets] = useState({})
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef([])
@@ -156,6 +158,39 @@ export default function RouteDistribution() {
       if (bounds.length > 0) mapInstance.current.fitBounds(bounds, { padding: [40, 40] })
     }
   }, [step, selectedOrders, distribution, orders, selectedLocationId, locations])
+
+  const removeFromRoute = (routeIndex, orderId) => {
+    setDistribution(prev => {
+      const newRoutes = prev.routes.map((route, ri) => {
+        if (ri !== routeIndex) return route
+        const removedOrder = route.orders.find(o => o.id === orderId)
+        if (removedOrder) {
+          setUnassignedOrders(ua => [...ua, removedOrder])
+        }
+        const newOrders = route.orders.filter(o => o.id !== orderId).map((o, idx) => ({ ...o, routePosition: idx + 1 }))
+        return { ...route, orders: newOrders, totalOrders: newOrders.length }
+      })
+      return { ...prev, routes: newRoutes, totalOrders: newRoutes.reduce((sum, r) => sum + r.orders.length, 0) }
+    })
+  }
+
+  const reassignOrder = (orderId, targetDriverId) => {
+    if (!targetDriverId) return
+    const order = unassignedOrders.find(o => o.id === orderId)
+    if (!order) return
+
+    setUnassignedOrders(prev => prev.filter(o => o.id !== orderId))
+    setDistribution(prev => {
+      const newRoutes = prev.routes.map(route => {
+        if (route.driverId !== targetDriverId) return route
+        const newOrders = [...route.orders, { ...order, routePosition: route.orders.length + 1 }]
+        return { ...route, orders: newOrders, totalOrders: newOrders.length }
+      })
+      return { ...prev, routes: newRoutes, totalOrders: newRoutes.reduce((sum, r) => sum + r.orders.length, 0) }
+    })
+    setReassignTargets(prev => { const n = { ...prev }; delete n[orderId]; return n })
+    toast.success('Pedido reasignado')
+  }
 
   const handleDistribute = async () => {
     if (selectedOrders.length === 0) return toast.error('Seleccioná al menos un pedido')
@@ -341,26 +376,69 @@ export default function RouteDistribution() {
                 </div>
                 <div className="space-y-1">
                   {route.orders.map(order => (
-                    <div key={order.id} className="flex items-center gap-2 py-1.5 px-2 rounded text-xs">
+                    <div key={order.id} className="flex items-center gap-2 py-1.5 px-2 rounded text-xs hover:bg-navy-800/50 group">
                       <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
                         style={{ background: ROUTE_COLORS[i % ROUTE_COLORS.length] }}>
                         {order.routePosition}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-gray-300 truncate">{order.customerName}</div>
+                        <div className="text-[10px] text-gray-500 font-mono truncate">{order.orderNumber}</div>
+                        <div className="text-gray-300 font-semibold truncate">{order.customerName}</div>
                         <div className="text-gray-500 truncate">{order.address}</div>
                       </div>
+                      <button onClick={() => removeFromRoute(i, order.id)}
+                        className="text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                        title="Sacar de esta ruta">
+                        <X size={14} />
+                      </button>
                     </div>
                   ))}
                 </div>
               </div>
             ))}
 
+            {/* Pedidos sin asignar */}
+            {unassignedOrders.length > 0 && (
+              <div className="card-p border border-amber-500/30">
+                <h3 className="font-semibold text-amber-400 flex items-center gap-2 mb-3">
+                  <Package size={16} /> Pedidos sin asignar ({unassignedOrders.length})
+                </h3>
+                <div className="space-y-2">
+                  {unassignedOrders.map(order => (
+                    <div key={order.id} className="flex items-center gap-2 py-2 px-2 rounded bg-navy-800/50 text-xs">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] text-gray-500 font-mono truncate">{order.orderNumber}</div>
+                        <div className="text-gray-300 font-semibold truncate">{order.customerName}</div>
+                        <div className="text-gray-500 truncate">{order.address}</div>
+                      </div>
+                      <select
+                        className="bg-navy-900 border border-navy-700 rounded text-xs text-gray-300 px-1.5 py-1"
+                        value={reassignTargets[order.id] || ''}
+                        onChange={e => setReassignTargets(prev => ({ ...prev, [order.id]: e.target.value }))}
+                      >
+                        <option value="">Cadete...</option>
+                        {distribution.routes.map(r => (
+                          <option key={r.driverId} value={r.driverId}>{r.driverName}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => reassignOrder(order.id, reassignTargets[order.id])}
+                        disabled={!reassignTargets[order.id]}
+                        className="text-xs text-brand-400 hover:text-brand-300 disabled:text-gray-600 whitespace-nowrap"
+                      >
+                        Reasignar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2">
-              <button onClick={() => { setStep(1); setDistribution(null) }} className="btn-secondary flex-1 justify-center">
+              <button onClick={() => { setStep(1); setDistribution(null); setUnassignedOrders([]); setReassignTargets({}) }} className="btn-secondary flex-1 justify-center">
                 <RotateCcw size={16} /> Volver
               </button>
-              <button onClick={handleConfirm} disabled={confirming} className="btn-primary flex-1 justify-center">
+              <button onClick={handleConfirm} disabled={confirming || unassignedOrders.length > 0} className="btn-primary flex-1 justify-center">
                 <Check size={16} /> {confirming ? 'Confirmando...' : 'Confirmar rutas'}
               </button>
             </div>
