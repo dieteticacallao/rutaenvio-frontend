@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api, ROUTE_COLORS } from '../lib/store'
-import { Route, Users, Zap, Check, QrCode, ArrowRight, RotateCcw, Package, MapPin, X } from 'lucide-react'
+import { Route, Users, Zap, Check, QrCode, ArrowRight, RotateCcw, Package, MapPin, X, Copy, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function RouteDistribution() {
@@ -446,17 +446,40 @@ export default function RouteDistribution() {
 
           {step === 3 && confirmedRoutes && <>
             {/* QR codes for each route */}
-            {confirmedRoutes.map((route, i) => (
-              <div key={route.id} className="card-p text-center">
-                <div className="text-sm font-semibold text-white mb-2">{route.name}</div>
-                {route.qrCode && (
-                  <img src={route.qrCode} alt="QR" className="w-48 h-48 mx-auto rounded-lg bg-white p-2" />
-                )}
-                <p className="text-xs text-gray-500 mt-2">
-                  El cadete escanea este QR desde la app para cargar su ruta
-                </p>
-              </div>
-            ))}
+            {confirmedRoutes.map((route, i) => {
+              const routeLink = route.linkToken ? `${window.location.origin}/ruta/${route.linkToken}` : null
+              return (
+                <div key={route.id} className="card-p text-center">
+                  <div className="text-sm font-semibold text-white mb-2">{route.name}</div>
+                  {route.qrCode && (
+                    <img src={route.qrCode} alt="QR" className="w-48 h-48 mx-auto rounded-lg bg-white p-2" />
+                  )}
+                  <p className="text-xs text-gray-500 mt-2">
+                    El cadete escanea este QR desde la app para cargar su ruta
+                  </p>
+                  {routeLink && (
+                    <div className="flex gap-2 mt-3 justify-center">
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(routeLink); toast.success('Link copiado') }}
+                        className="btn-secondary text-xs"
+                      >
+                        <Copy size={14} /> Copiar link
+                      </button>
+                      {route.driverPhone && (
+                        <a
+                          href={`https://wa.me/${route.driverPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola! Aca tenes tu ruta de hoy: ${routeLink}`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-secondary text-xs inline-flex items-center gap-1.5"
+                        >
+                          <MessageCircle size={14} /> Enviar por WhatsApp
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
             <button onClick={() => { setStep(1); setDistribution(null); setConfirmedRoutes(null) }}
               className="btn-secondary w-full justify-center">
               <RotateCcw size={16} /> Armar nuevas rutas

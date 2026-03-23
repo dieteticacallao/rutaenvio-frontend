@@ -10,6 +10,7 @@ import Drivers from './pages/Drivers'
 import Settings from './pages/Settings'
 import OrderDetail from './pages/OrderDetail'
 import TrackingPage from './pages/TrackingPage'
+import RouteView from './pages/RouteView'
 
 export default function App() {
   const { isAuthenticated, loadUser, token } = useAuth()
@@ -17,10 +18,16 @@ export default function App() {
 
   useEffect(() => { if (token) loadUser() }, [])
 
-  // Public tracking page - no auth needed
+  // Public pages - no auth needed
   if (location.pathname.startsWith('/track/')) {
     return <Routes>
       <Route path="/track/:trackingCode" element={<TrackingPage />} />
+    </Routes>
+  }
+
+  if (location.pathname.startsWith('/ruta/')) {
+    return <Routes>
+      <Route path="/ruta/:token" element={<RouteView />} />
     </Routes>
   }
 
