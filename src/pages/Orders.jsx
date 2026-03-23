@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP } from '../lib/store'
-import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Upload, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Upload, AlertCircle, CheckCircle2, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Orders() {
@@ -14,6 +14,9 @@ export default function Orders() {
   const [editingOrder, setEditingOrder] = useState(null)
   const [importing, setImporting] = useState(false)
   const [showExcelModal, setShowExcelModal] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   const loadOrders = useCallback(() => {
     setLoading(true)
@@ -58,6 +61,28 @@ export default function Orders() {
     setImporting(false)
   }
 
+  // Client-side filtering
+  const filteredOrders = orders.filter(order => {
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      const matchesSearch = (order.orderNumber || '').toLowerCase().includes(q) ||
+        (order.customerName || '').toLowerCase().includes(q)
+      if (!matchesSearch) return false
+    }
+    // Date from filter
+    if (dateFrom) {
+      const orderDate = order.createdAt ? new Date(order.createdAt) : null
+      if (!orderDate || orderDate < new Date(dateFrom + 'T00:00:00')) return false
+    }
+    // Date to filter
+    if (dateTo) {
+      const orderDate = order.createdAt ? new Date(order.createdAt) : null
+      if (!orderDate || orderDate > new Date(dateTo + 'T23:59:59')) return false
+    }
+    return true
+  })
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -90,6 +115,52 @@ export default function Orders() {
         ))}
       </div>
 
+      {/* Search and date filters */}
+      <div className="flex gap-3 flex-wrap items-end">
+        <div className="flex-1 min-w-[200px]">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Buscar por numero de pedido o cliente..."
+              className="input pl-9 w-full"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500">Desde</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="input text-xs py-2 px-2.5"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500">Hasta</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="input text-xs py-2 px-2.5"
+            />
+          </div>
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(''); setDateTo('') }} className="text-gray-500 hover:text-white" title="Limpiar fechas">
+              <X size={16} />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Table */}
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
@@ -106,9 +177,9 @@ export default function Orders() {
           <tbody>
             {loading ? (
               <tr><td colSpan={6} className="p-8 text-center text-gray-500"><Loader2 size={24} className="animate-spin inline-block mr-2" />Cargando pedidos...</td></tr>
-            ) : orders.length === 0 ? (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-500">No hay pedidos. Importá de Tiendanube o creá uno manual.</td></tr>
-            ) : orders.map(order => (
+            ) : filteredOrders.length === 0 ? (
+              <tr><td colSpan={6} className="p-8 text-center text-gray-500">{orders.length === 0 ? 'No hay pedidos. Importa de Tiendanube o crea uno manual.' : 'No se encontraron pedidos con esos filtros.'}</td></tr>
+            ) : filteredOrders.map(order => (
               <tr key={order.id} className="table-row">
                 <td className="p-3 pl-4">
                   <div className="font-medium text-white">{order.orderNumber}</div>
