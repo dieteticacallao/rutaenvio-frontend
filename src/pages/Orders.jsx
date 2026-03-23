@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP } from '../lib/store'
-import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Upload, AlertCircle, CheckCircle2, Calendar } from 'lucide-react'
+import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Upload, AlertCircle, CheckCircle2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Orders() {
@@ -116,46 +116,64 @@ export default function Orders() {
       </div>
 
       {/* Search and date filters */}
-      <div className="flex gap-3 flex-wrap items-end">
-        <div className="flex-1 min-w-[200px]">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Buscar por numero de pedido o cliente..."
-              className="input pl-9 w-full"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
-                <X size={14} />
-              </button>
-            )}
+      <div className="space-y-3">
+        <div className="flex gap-3 flex-wrap items-end">
+          <div className="flex-1 min-w-[200px]">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Buscar por numero de pedido o cliente..."
+                className="input pl-9 w-full"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-500">Desde</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={e => setDateFrom(e.target.value)}
+                className="input text-xs py-2 px-2.5"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-500">Hasta</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                className="input text-xs py-2 px-2.5"
+              />
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-gray-500">Desde</label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
-              className="input text-xs py-2 px-2.5"
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-gray-500">Hasta</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
-              className="input text-xs py-2 px-2.5"
-            />
-          </div>
-          {(dateFrom || dateTo) && (
-            <button onClick={() => { setDateFrom(''); setDateTo('') }} className="text-gray-500 hover:text-white" title="Limpiar fechas">
-              <X size={16} />
+        <div className="flex gap-2 flex-wrap items-center">
+          {[
+            { label: 'Hoy', fn: () => { const d = new Date().toISOString().slice(0, 10); setDateFrom(d); setDateTo(d) } },
+            { label: 'Ayer', fn: () => { const d = new Date(Date.now() - 86400000).toISOString().slice(0, 10); setDateFrom(d); setDateTo(d) } },
+            { label: 'Esta semana', fn: () => { const now = new Date(); const day = now.getDay(); const diff = day === 0 ? 6 : day - 1; const mon = new Date(now); mon.setDate(now.getDate() - diff); setDateFrom(mon.toISOString().slice(0, 10)); setDateTo(now.toISOString().slice(0, 10)) } },
+            { label: 'Este mes', fn: () => { const now = new Date(); const first = new Date(now.getFullYear(), now.getMonth(), 1); setDateFrom(first.toISOString().slice(0, 10)); setDateTo(now.toISOString().slice(0, 10)) } },
+          ].map(btn => (
+            <button key={btn.label} onClick={btn.fn}
+              className="text-xs px-2.5 py-1.5 rounded-lg bg-navy-800 text-gray-400 hover:text-white hover:bg-navy-700 transition-colors">
+              {btn.label}
+            </button>
+          ))}
+          {(searchQuery || dateFrom || dateTo || filter.status) && (
+            <button
+              onClick={() => { setSearchQuery(''); setDateFrom(''); setDateTo(''); setFilter(f => ({ ...f, status: '', page: 1 })) }}
+              className="text-xs px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-1"
+            >
+              <X size={12} /> Limpiar filtros
             </button>
           )}
         </div>
