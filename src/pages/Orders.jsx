@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP } from '../lib/store'
-import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Upload, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Upload, AlertCircle, CheckCircle2, Link2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Orders() {
@@ -223,6 +223,15 @@ export default function Orders() {
                   <button onClick={() => navigate(`/orders/${order.id}`)} className="text-gray-500 hover:text-emerald-400 transition-colors" title="Ver detalle">
                     <Eye size={16} />
                   </button>
+                  {order.trackingCode && (
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/track/${order.trackingCode}`); toast.success('Link copiado') }}
+                      className="text-gray-500 hover:text-brand-400 transition-colors"
+                      title="Copiar link de tracking"
+                    >
+                      <Link2 size={16} />
+                    </button>
+                  )}
                   <button onClick={() => setEditingOrder(order)} className="text-gray-500 hover:text-brand-400 transition-colors" title="Editar pedido">
                     <Pencil size={16} />
                   </button>

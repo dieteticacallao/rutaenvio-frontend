@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP } from '../lib/store'
-import { ArrowLeft, MapPin, Phone, User, Package, Clock, Star, MessageSquare, Camera, Loader2, FileText } from 'lucide-react'
+import { ArrowLeft, MapPin, Phone, User, Package, Clock, Star, MessageSquare, Camera, Loader2, FileText, Copy, MessageCircle, Link2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const TIMELINE_STEPS = [
@@ -109,6 +109,49 @@ export default function OrderDetail() {
           </div>
         )}
       </div>
+
+      {/* Link de tracking */}
+      {order.trackingCode && (
+        <div className="card-p space-y-3">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+            <Link2 size={14} /> Link de seguimiento
+          </h2>
+          <div className="flex items-center gap-2 bg-navy-900 border border-navy-700 rounded-lg px-3 py-2">
+            <input
+              type="text"
+              readOnly
+              value={`${window.location.origin}/track/${order.trackingCode}`}
+              className="flex-1 bg-transparent text-sm text-brand-300 outline-none truncate"
+              onClick={e => e.target.select()}
+            />
+            <button
+              onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/track/${order.trackingCode}`); toast.success('Link copiado') }}
+              className="text-gray-400 hover:text-brand-400 transition-colors flex-shrink-0"
+              title="Copiar link"
+            >
+              <Copy size={16} />
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/track/${order.trackingCode}`); toast.success('Link copiado') }}
+              className="btn-secondary text-xs"
+            >
+              <Copy size={14} /> Copiar link
+            </button>
+            {order.customerPhone && (
+              <a
+                href={`https://wa.me/${order.customerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola! Podes seguir tu envio en este link: ${window.location.origin}/track/${order.trackingCode}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary text-xs inline-flex items-center gap-1.5"
+              >
+                <MessageCircle size={14} /> Enviar por WhatsApp
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Cliente */}
