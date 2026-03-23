@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { api, STATUS_MAP } from '../lib/store'
-import { Clock, Package, QrCode, Copy, MessageCircle, ArrowLeft, ChevronRight, Search, Filter } from 'lucide-react'
+import { Clock, Package, QrCode, Copy, MessageCircle, ArrowLeft, ChevronRight, Search, Filter, XCircle, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const ROUTE_STATUS = {
   CONFIRMED: { label: 'En progreso', className: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' },
   IN_PROGRESS: { label: 'En progreso', className: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' },
-  COMPLETED: { label: 'Completada', className: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' }
+  COMPLETED: { label: 'Completada', className: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' },
+  CANCELLED: { label: 'Cancelada', className: 'bg-red-500/10 text-red-400 border border-red-500/20' }
 }
 
 export default function RoutesHistory() {
@@ -44,6 +45,36 @@ export default function RoutesHistory() {
       toast.error('Error al cargar detalle')
     }
     setLoadingDetail(false)
+  }
+
+  const cancelRoute = async (routeId) => {
+    if (!window.confirm('Estas seguro de que queres cancelar esta ruta? Los pedidos no entregados vuelven a estado pendiente.')) return
+    try {
+      await api.put(`/routes/${routeId}/cancel`)
+      toast.success('Ruta cancelada')
+      fetchRoutes()
+      if (selectedRoute?.id === routeId) {
+        setSelectedRoute(null)
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al cancelar la ruta')
+    }
+  }
+
+  const removeOrder = async (routeId, orderId, customerName) => {
+    if (!window.confirm(`Sacar el pedido de ${customerName} de esta ruta?`)) return
+    try {
+      await api.put(`/routes/${routeId}/remove-order/${orderId}`)
+      toast.success('Pedido removido de la ruta')
+      openDetail(routeId)
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al sacar el pedido')
+    }
+  }
+
+  const hasUndelivered = (orders) => {
+    if (!orders) return false
+    return orders.some(o => o.status !== 'DELIVERED')
   }
 
   const getRouteLink = (route) => {
@@ -88,7 +119,17 @@ export default function RoutesHistory() {
               {selectedRoute.driver?.name} — {deliveredCount}/{totalOrders} entregados — {new Date(selectedRoute.date).toLocaleDateString('es-AR')}
             </p>
           </div>
-          {getStatusBadge(selectedRoute.status)}
+          <div className="flex items-center gap-2">
+            {hasUndelivered(selectedRoute.orders) && selectedRoute.status !== 'CANCELLED' && (
+              <button
+                onClick={() => cancelRoute(selectedRoute.id)}
+                className="btn-secondary text-xs text-red-400 border-red-500/30 hover:bg-red-500/10"
+              >
+                <XCircle size={14} /> Cancelar ruta
+              </button>
+            )}
+            {getStatusBadge(selectedRoute.status)}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
@@ -113,6 +154,15 @@ export default function RoutesHistory() {
                       )}
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
+                    {order.status !== 'DELIVERED' && selectedRoute.status !== 'CANCELLED' && (
+                      <button
+                        onClick={() => removeOrder(selectedRoute.id, order.id, order.customerName)}
+                        className="text-gray-600 hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-red-500/10 flex-shrink-0"
+                        title="Sacar de la ruta"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
                   </div>
                 )
               })}
@@ -273,6 +323,15 @@ export default function RoutesHistory() {
                             title="Copiar link"
                           >
                             <Copy size={16} />
+                          </button>
+                        )}
+                        {hasUndelivered(route.orders) && route.status !== 'CANCELLED' && (
+                          <button
+                            onClick={() => cancelRoute(route.id)}
+                            className="text-gray-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-500/10"
+                            title="Cancelar ruta"
+                          >
+                            <XCircle size={16} />
                           </button>
                         )}
                         <ChevronRight size={16} className="text-gray-600 ml-1" />
