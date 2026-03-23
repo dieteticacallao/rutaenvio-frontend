@@ -22,6 +22,7 @@ export default function RouteView() {
   const [loading, setLoading] = useState(true)
   const [deliverModal, setDeliverModal] = useState(null)
   const [receiverName, setReceiverName] = useState('')
+  const [receiverDni, setReceiverDni] = useState('')
   const [photo, setPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [submitting, setSubmitting] = useState(false)
@@ -91,7 +92,7 @@ export default function RouteView() {
     const lineCoords = route.orders.filter(o => o.lat && o.lng).map(o => [o.lat, o.lng])
     if (route.origin) lineCoords.unshift([route.origin.lat, route.origin.lng])
     if (lineCoords.length > 1) {
-      L.polyline(lineCoords, { color: '#6366f1', weight: 3, opacity: 0.6, dashArray: '8 6' }).addTo(mapInstance.current)
+      L.polyline(lineCoords, { color: '#3b82f6', weight: 3, opacity: 0.8, dashArray: '8 6' }).addTo(mapInstance.current)
     }
 
     if (bounds.length > 0) mapInstance.current.fitBounds(bounds, { padding: [30, 30] })
@@ -158,6 +159,7 @@ export default function RouteView() {
   const openDeliverModal = (order) => {
     setDeliverModal(order)
     setReceiverName('')
+    setReceiverDni('')
     setPhoto(null)
     setPhotoPreview(null)
   }
@@ -173,9 +175,10 @@ export default function RouteView() {
 
   const confirmDelivery = async () => {
     if (!deliverModal) return
+    if (!receiverName.trim() || !receiverDni.trim()) return
     setSubmitting(true)
     try {
-      const body = { receiverName: receiverName || null, deliveryPhoto: photoPreview || null }
+      const body = { receiverName: receiverName.trim(), receiverDni: receiverDni.trim(), deliveryPhoto: photoPreview || null }
       const r = await fetch(`${API}/driver-web/${token}/order/${deliverModal.id}/deliver`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -200,8 +203,10 @@ export default function RouteView() {
   }
 
   const navigateTo = (order) => {
+    const province = order.province || 'Buenos Aires'
     const parts = [order.address]
     if (order.city) parts.push(order.city)
+    parts.push(province)
     parts.push('Argentina')
     const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(parts.join(', '))}`
     window.open(url, '_blank')
@@ -392,17 +397,31 @@ export default function RouteView() {
             </p>
 
             {/* Receiver name */}
-            <label className="block text-xs text-gray-400 mb-1">Nombre de quien recibe</label>
+            <label className="block text-xs text-gray-400 mb-1">Nombre de quien recibe *</label>
             <input
               type="text"
               value={receiverName}
               onChange={e => setReceiverName(e.target.value)}
               placeholder="Ej: Juan Perez"
+              required
+              className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 mb-4"
+            />
+
+            {/* DNI */}
+            <label className="block text-xs text-gray-400 mb-1">DNI *</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={receiverDni}
+              onChange={e => setReceiverDni(e.target.value.replace(/\D/g, ''))}
+              placeholder="Ej: 12345678"
+              required
               className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 mb-4"
             />
 
             {/* Photo capture */}
-            <label className="block text-xs text-gray-400 mb-1">Foto de entrega (opcional)</label>
+            <label className="block text-xs text-gray-400 mb-1">Foto entrega - foto al domicilio (opcional)</label>
             {!photoPreview ? (
               <label className="flex items-center justify-center gap-2 w-full py-8 border-2 border-dashed border-navy-800 rounded-xl text-gray-500 hover:border-brand-500 hover:text-brand-400 transition-colors cursor-pointer mb-4">
                 <Camera size={20} />
@@ -430,7 +449,7 @@ export default function RouteView() {
             {/* Confirm button */}
             <button
               onClick={confirmDelivery}
-              disabled={submitting}
+              disabled={submitting || !receiverName.trim() || !receiverDni.trim()}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50"
             >
               {submitting ? (
@@ -445,7 +464,7 @@ export default function RouteView() {
 
       <style>{`
         .leaflet-container { background: #111829 !important; }
-        .leaflet-tile-pane { filter: saturate(0.3) brightness(0.7); }
+        .leaflet-tile-pane { }
         .leaflet-control-attribution { display: none !important; }
       `}</style>
     </div>
