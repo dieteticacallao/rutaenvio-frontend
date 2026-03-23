@@ -1,11 +1,12 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/store'
-import { LayoutDashboard, Package, Route, Users, Settings, LogOut, Truck } from 'lucide-react'
+import { LayoutDashboard, Package, Route, Users, Settings, LogOut, Truck, Clock } from 'lucide-react'
 
 const links = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/orders', icon: Package, label: 'Pedidos' },
   { to: '/routes', icon: Route, label: 'Rutas' },
+  { to: '/routes/history', icon: Clock, label: 'Historial' },
   { to: '/drivers', icon: Users, label: 'Cadetes' },
   { to: '/settings', icon: Settings, label: 'Config' },
 ]
