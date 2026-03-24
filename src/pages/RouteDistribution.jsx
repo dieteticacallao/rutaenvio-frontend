@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api, ROUTE_COLORS } from '../lib/store'
-import { Route, Users, Zap, Check, QrCode, ArrowRight, RotateCcw, Package, MapPin, X, Copy, MessageCircle, Printer } from 'lucide-react'
+import { Route, Users, Zap, Check, QrCode, ArrowRight, RotateCcw, Package, MapPin, X, Copy, MessageCircle, Printer, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function RouteDistribution() {
@@ -18,6 +18,7 @@ export default function RouteDistribution() {
   const [confirming, setConfirming] = useState(false)
   const [unassignedOrders, setUnassignedOrders] = useState([])
   const [reassignTargets, setReassignTargets] = useState({})
+  const [orderSearch, setOrderSearch] = useState('')
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef([])
@@ -357,11 +358,31 @@ export default function RouteDistribution() {
                 </div>
               </div>
 
+              <div className="relative mb-2">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input
+                  type="text"
+                  value={orderSearch}
+                  onChange={e => setOrderSearch(e.target.value)}
+                  placeholder="Buscar por nombre o numero de pedido..."
+                  className="input pl-8 py-2 text-xs w-full"
+                />
+                {orderSearch && (
+                  <button onClick={() => setOrderSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
               {orders.length === 0 ? (
-                <p className="text-sm text-gray-500 py-4 text-center">No hay pedidos pendientes geocodificados. Importá pedidos primero.</p>
+                <p className="text-sm text-gray-500 py-4 text-center">No hay pedidos pendientes geocodificados. Importa pedidos primero.</p>
               ) : (
                 <div className="space-y-1 max-h-[250px] overflow-y-auto">
-                  {orders.map(order => (
+                  {orders.filter(o => {
+                    if (!orderSearch.trim()) return true
+                    const q = orderSearch.toLowerCase()
+                    return (o.customerName || '').toLowerCase().includes(q) || (o.orderNumber || '').toLowerCase().includes(q)
+                  }).map(order => (
                     <label key={order.id}
                       className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors ${
                         selectedOrders.includes(order.id) ? 'bg-brand-500/10 border border-brand-500/20' : 'hover:bg-navy-800/50 border border-transparent'
