@@ -66,6 +66,19 @@ export default function RouteView() {
     if (token) fetchRoute()
   }, [token, fetchRoute])
 
+  // Extract origin from any possible backend field
+  const getOrigin = () => {
+    if (!route) return null
+    // Try route.origin object
+    if (route.origin?.lat && route.origin?.lng) return route.origin
+    // Try route.location object
+    if (route.location?.lat && route.location?.lng) return route.location
+    // Try flat fields on route
+    if (route.originLat && route.originLng) return { lat: route.originLat, lng: route.originLng }
+    if (route.startLat && route.startLng) return { lat: route.startLat, lng: route.startLng }
+    return null
+  }
+
   // Initialize map
   useEffect(() => {
     if (!route || !mapRef.current || mapInstance.current) return
@@ -78,16 +91,17 @@ export default function RouteView() {
     })
     L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(mapInstance.current)
 
+    const origin = getOrigin()
     const bounds = []
-    if (route.origin) {
-      L.marker([route.origin.lat, route.origin.lng], {
+    if (origin) {
+      L.marker([origin.lat, origin.lng], {
         icon: L.divIcon({
           className: '',
           html: '<div style="width:32px;height:32px;background:#ef4444;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(239,68,68,0.5)">O</div>',
           iconSize: [32, 32], iconAnchor: [16, 16]
         })
       }).addTo(mapInstance.current)
-      bounds.push([route.origin.lat, route.origin.lng])
+      bounds.push([origin.lat, origin.lng])
     }
 
     route.orders.forEach(order => {
@@ -96,7 +110,7 @@ export default function RouteView() {
     })
 
     const lineCoords = route.orders.filter(o => o.lat && o.lng).map(o => [o.lat, o.lng])
-    if (route.origin) lineCoords.unshift([route.origin.lat, route.origin.lng])
+    if (origin) lineCoords.unshift([origin.lat, origin.lng])
     if (lineCoords.length > 1) {
       L.polyline(lineCoords, { color: '#3b82f6', weight: 3, opacity: 0.8, dashArray: '8 6' }).addTo(mapInstance.current)
     }
@@ -108,11 +122,12 @@ export default function RouteView() {
     }
   }, [route?.id])
 
-  // Fetch OSRM route estimate
+  // Fetch OSRM route estimate (origin -> pedido1 -> pedido2 -> ... -> ultimoPedido)
   useEffect(() => {
     if (!route || routeEstimate) return
+    const origin = getOrigin()
     const waypoints = []
-    if (route.origin?.lat && route.origin?.lng) waypoints.push([route.origin.lng, route.origin.lat])
+    if (origin) waypoints.push([origin.lng, origin.lat])
     route.orders.forEach(o => { if (o.lat && o.lng) waypoints.push([o.lng, o.lat]) })
     if (waypoints.length < 2) return
     const coords = waypoints.map(w => w.join(',')).join(';')
