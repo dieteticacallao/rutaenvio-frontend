@@ -484,8 +484,16 @@ function ExcelImportModal({ onClose, onImported }) {
   )
 }
 
+function toLocalDate(date) {
+  const d = date || new Date()
+  const year = d.toLocaleString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric' })
+  const month = d.toLocaleString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', month: '2-digit' })
+  const day = d.toLocaleString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit' })
+  return `${year}-${month}-${day}`
+}
+
 function TNImportModal({ onClose, onImported }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toLocalDate(new Date())
   const [tnOrders, setTnOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(new Set())
@@ -563,14 +571,14 @@ function TNImportModal({ onClose, onImported }) {
     return `$${Number(amount).toLocaleString('es-AR')}${currency ? ` ${currency}` : ''}`
   }
 
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const yesterday = toLocalDate(new Date(Date.now() - 86400000))
   const weekStart = (() => {
     const now = new Date()
     const day = now.getDay()
     const diff = day === 0 ? 6 : day - 1
     const mon = new Date(now)
     mon.setDate(now.getDate() - diff)
-    return mon.toISOString().slice(0, 10)
+    return toLocalDate(mon)
   })()
 
   return (
