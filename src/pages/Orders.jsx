@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, STATUS_MAP, useAuth } from '../lib/store'
+import { api, STATUS_MAP } from '../lib/store'
 import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Upload, AlertCircle, CheckCircle2, Link2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Orders() {
   const navigate = useNavigate()
-  const { business } = useAuth()
   const [orders, setOrders] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -18,6 +17,13 @@ export default function Orders() {
   const [searchQuery, setSearchQuery] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [tnConnected, setTnConnected] = useState(false)
+
+  useEffect(() => {
+    api.get('/dashboard/settings').then(r => {
+      setTnConnected(!!r.data?.tnStoreId)
+    }).catch(() => {})
+  }, [])
 
   const loadOrders = useCallback(() => {
     setLoading(true)
@@ -51,7 +57,7 @@ export default function Orders() {
   }
 
   const handleTNImport = () => {
-    if (!business?.tnStoreId) {
+    if (!tnConnected) {
       toast.error('Primero conecta Tiendanube en Configuracion')
       return
     }
