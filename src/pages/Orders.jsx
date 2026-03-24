@@ -505,16 +505,20 @@ function TNImportModal({ onClose, onImported }) {
     setLoading(true)
     setError(null)
     setSelected(new Set())
-    const params = {}
+    const params = { filter_shipping: 'rutaenvio' }
     if (from) params.date_from = from
     if (to) params.date_to = to
     api.get('/tiendanube/orders', { params })
       .then(r => {
         const d = r.data
-        const list = Array.isArray(d) ? d
+        const all = Array.isArray(d) ? d
           : Array.isArray(d?.data) ? d.data
           : Array.isArray(d?.orders) ? d.orders
           : []
+        const list = all.filter(order => {
+          const s = (order.shippingMethod || order.shipping || order.shipping_option || '').toLowerCase()
+          return s.includes('rutaenvio')
+        })
         setTnOrders(list)
         setLoading(false)
       })
@@ -660,7 +664,7 @@ function TNImportModal({ onClose, onImported }) {
         ) : (
           <>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-400">{tnOrders.length} pedidos encontrados</span>
+              <span className="text-gray-400">{tnOrders.length} pedidos con envio RutaEnvio encontrados</span>
               <span className="text-gray-500">{selected.size} seleccionados</span>
             </div>
 
