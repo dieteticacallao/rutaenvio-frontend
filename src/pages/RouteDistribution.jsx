@@ -160,8 +160,12 @@ export default function RouteDistribution() {
     }
 
     if (step === 3) {
-      // Use confirmedRoutes if they have orders with coords, otherwise fallback to distribution.routes
-      const routesToDraw = (confirmedRoutes || []).length > 0 ? confirmedRoutes : (distribution?.routes || [])
+      // Check if confirmedRoutes actually has orders with coordinates
+      const confirmedHasCoords = (confirmedRoutes || []).some(r =>
+        (r.orders || []).some(o => o.lat && o.lng)
+      )
+      // Use confirmedRoutes only if they have geocoded orders, otherwise use distribution data
+      const routesToDraw = confirmedHasCoords ? confirmedRoutes : (distribution?.routes || [])
       const bounds = []
 
       routesToDraw.forEach((route, ri) => {
@@ -181,30 +185,38 @@ export default function RouteDistribution() {
           bounds.push([order.lat, order.lng])
         })
 
-        // Build OSRM route polyline
-        const waypoints = []
-        if (originLoc?.lat && originLoc?.lng) waypoints.push([originLoc.lng, originLoc.lat])
-        routeOrders.forEach(o => { if (o.lat && o.lng) waypoints.push([o.lng, o.lat]) })
+        // Polyline: origin -> orders in sequence
+        const lineCoords = []
+        if (originLoc?.lat && originLoc?.lng) lineCoords.push([originLoc.lat, originLoc.lng])
+        routeOrders.forEach(o => { if (o.lat && o.lng) lineCoords.push([o.lat, o.lng]) })
 
-        if (waypoints.length >= 2) {
+        if (lineCoords.length >= 2) {
+          // Draw straight-line polyline immediately (always visible)
+          const polyline = L.polyline(lineCoords, { color, weight: 3, opacity: 0.6, dashArray: '8 6' })
+          polyline.addTo(mapInstance.current)
+          markersRef.current.push(polyline)
+
+          // Try OSRM for real route, replace straight line if successful
+          const waypoints = []
+          if (originLoc?.lat && originLoc?.lng) waypoints.push([originLoc.lng, originLoc.lat])
+          routeOrders.forEach(o => { if (o.lat && o.lng) waypoints.push([o.lng, o.lat]) })
           const coordStr = waypoints.map(w => w.join(',')).join(';')
           fetch(`https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson`)
             .then(r => r.json())
             .then(osrmData => {
               if (osrmData.routes?.[0]?.geometry?.coordinates && mapInstance.current) {
+                // Remove the straight-line polyline
+                polyline.remove()
+                const idx = markersRef.current.indexOf(polyline)
+                if (idx !== -1) markersRef.current.splice(idx, 1)
+                // Add OSRM polyline
                 const latlngs = osrmData.routes[0].geometry.coordinates.map(c => [c[1], c[0]])
-                const polyline = L.polyline(latlngs, { color, weight: 4, opacity: 0.8 })
-                polyline.addTo(mapInstance.current)
-                markersRef.current.push(polyline)
+                const osrmLine = L.polyline(latlngs, { color, weight: 4, opacity: 0.8 })
+                osrmLine.addTo(mapInstance.current)
+                markersRef.current.push(osrmLine)
               }
             })
-            .catch(() => {
-              if (!mapInstance.current) return
-              const fallbackCoords = waypoints.map(w => [w[1], w[0]])
-              const polyline = L.polyline(fallbackCoords, { color, weight: 3, opacity: 0.7, dashArray: '8 6' })
-              polyline.addTo(mapInstance.current)
-              markersRef.current.push(polyline)
-            })
+            .catch(() => {}) // Keep the straight-line fallback
         }
       })
 
@@ -280,16 +292,23 @@ export default function RouteDistribution() {
       const backendRoutes = data.routes || []
       const enrichedRoutes = backendRoutes.map((br, ri) => {
         const distRoute = distribution.routes[ri]
-        // Use distribution orders (which have lat/lng) as base, backend orders may be empty or minimal
         const distOrders = distRoute?.orders || []
-        const backendOrders = br.orders || []
-        // If backend returned orders, merge them; otherwise use distribution orders directly
-        const orders = backendOrders.length > 0
-          ? backendOrders.map(bo => {
-              const dOrder = distOrders.find(o => o.id === bo.id) || {}
-              return { ...dOrder, ...bo, lat: bo.lat || dOrder.lat, lng: bo.lng || dOrder.lng }
-            })
-          : distOrders
+        // Always use distOrders as the base (they have lat/lng from geocoding)
+        // Overlay backend metadata (id, status, etc) on top
+        const orders = distOrders.map((dOrder, oi) => {
+          // Try to find matching backend order by id or by index
+          const bo = (br.orders || []).find(o => o.id === dOrder.id) || (br.orders || [])[oi] || {}
+          return {
+            ...dOrder,
+            ...bo,
+            // Ensure lat/lng are never lost - distOrder always has them
+            lat: dOrder.lat,
+            lng: dOrder.lng,
+            customerName: dOrder.customerName || bo.customerName,
+            address: dOrder.address || bo.address,
+            routePosition: dOrder.routePosition || bo.routePosition || (oi + 1)
+          }
+        })
         return {
           ...br,
           orders,
