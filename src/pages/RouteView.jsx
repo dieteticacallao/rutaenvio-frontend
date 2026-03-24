@@ -464,7 +464,15 @@ export default function RouteView() {
                   </div>
                 )}
                 <button
-                  onClick={startRoute}
+                  onClick={() => {
+                    if (allPickedUp) {
+                      startRoute()
+                    } else {
+                      if (window.confirm(`Estas seguro? Tenes ${pendingPickup.length} pedido${pendingPickup.length !== 1 ? 's' : ''} sin confirmar retiro. Estos pedidos no se incluiran en la ruta.`)) {
+                        startRoute()
+                      }
+                    }
+                  }}
                   disabled={startingRoute}
                   className={`w-full flex items-center justify-center gap-2.5 py-4 rounded-xl text-white font-bold text-base transition-colors disabled:opacity-50 ${
                     allPickedUp ? 'bg-brand-500 hover:bg-brand-600' : 'bg-amber-600 hover:bg-amber-700'
