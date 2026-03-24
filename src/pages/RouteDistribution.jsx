@@ -158,10 +158,12 @@ export default function RouteDistribution() {
       if (bounds.length > 0) mapInstance.current.fitBounds(bounds, { padding: [40, 40] })
     }
 
-    if (step === 3 && confirmedRoutes) {
+    if (step === 3) {
+      // Use confirmedRoutes if they have orders with coords, otherwise fallback to distribution.routes
+      const routesToDraw = (confirmedRoutes || []).length > 0 ? confirmedRoutes : (distribution?.routes || [])
       const bounds = []
 
-      confirmedRoutes.forEach((route, ri) => {
+      routesToDraw.forEach((route, ri) => {
         const color = ROUTE_COLORS[ri % ROUTE_COLORS.length]
         const routeOrders = route.orders || []
 
@@ -172,31 +174,31 @@ export default function RouteDistribution() {
               className: '',
               html: `<div style="width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 0 8px ${color}60">${order.routePosition || ''}</div>`
             })
-          }).bindPopup(`<b>${route.driverName || route.name}</b> - Parada ${order.routePosition}<br>${order.customerName}<br>${order.address}`)
+          }).bindPopup(`<b>${route.driverName || route.name || ''}</b> - Parada ${order.routePosition}<br>${order.customerName || ''}<br>${order.address || ''}`)
           marker.addTo(mapInstance.current)
           markersRef.current.push(marker)
           bounds.push([order.lat, order.lng])
         })
 
-        // Build OSRM route
+        // Build OSRM route polyline
         const waypoints = []
         if (originLoc?.lat && originLoc?.lng) waypoints.push([originLoc.lng, originLoc.lat])
         routeOrders.forEach(o => { if (o.lat && o.lng) waypoints.push([o.lng, o.lat]) })
 
         if (waypoints.length >= 2) {
-          const coords = waypoints.map(w => w.join(',')).join(';')
-          fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`)
+          const coordStr = waypoints.map(w => w.join(',')).join(';')
+          fetch(`https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson`)
             .then(r => r.json())
-            .then(data => {
-              if (data.routes?.[0]?.geometry?.coordinates) {
-                const latlngs = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]])
+            .then(osrmData => {
+              if (osrmData.routes?.[0]?.geometry?.coordinates && mapInstance.current) {
+                const latlngs = osrmData.routes[0].geometry.coordinates.map(c => [c[1], c[0]])
                 const polyline = L.polyline(latlngs, { color, weight: 4, opacity: 0.8 })
                 polyline.addTo(mapInstance.current)
                 markersRef.current.push(polyline)
               }
             })
             .catch(() => {
-              // Fallback: straight lines
+              if (!mapInstance.current) return
               const fallbackCoords = waypoints.map(w => [w[1], w[0]])
               const polyline = L.polyline(fallbackCoords, { color, weight: 3, opacity: 0.7, dashArray: '8 6' })
               polyline.addTo(mapInstance.current)
@@ -273,14 +275,26 @@ export default function RouteDistribution() {
         })),
         date: new Date().toISOString()
       })
-      // Merge backend response with coordinate data from distribution
-      const enrichedRoutes = (data.routes || []).map((backendRoute, ri) => {
+      // Merge backend response (id, linkToken, qrCode) with full order data from distribution
+      const backendRoutes = data.routes || []
+      const enrichedRoutes = backendRoutes.map((br, ri) => {
         const distRoute = distribution.routes[ri]
-        const ordersWithCoords = (backendRoute.orders || []).map(bo => {
-          const distOrder = distRoute?.orders?.find(o => o.id === bo.id) || {}
-          return { ...distOrder, ...bo, lat: bo.lat || distOrder.lat, lng: bo.lng || distOrder.lng }
-        })
-        return { ...backendRoute, orders: ordersWithCoords, driverName: backendRoute.driverName || distRoute?.driverName }
+        // Use distribution orders (which have lat/lng) as base, backend orders may be empty or minimal
+        const distOrders = distRoute?.orders || []
+        const backendOrders = br.orders || []
+        // If backend returned orders, merge them; otherwise use distribution orders directly
+        const orders = backendOrders.length > 0
+          ? backendOrders.map(bo => {
+              const dOrder = distOrders.find(o => o.id === bo.id) || {}
+              return { ...dOrder, ...bo, lat: bo.lat || dOrder.lat, lng: bo.lng || dOrder.lng }
+            })
+          : distOrders
+        return {
+          ...br,
+          orders,
+          driverName: br.driverName || distRoute?.driverName,
+          driverId: br.driverId || distRoute?.driverId
+        }
       })
       setConfirmedRoutes(enrichedRoutes)
       setStep(3)
