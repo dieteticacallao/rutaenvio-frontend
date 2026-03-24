@@ -160,12 +160,21 @@ export default function RouteDistribution() {
     }
 
     if (step === 3) {
-      // Check if confirmedRoutes actually has orders with coordinates
-      const confirmedHasCoords = (confirmedRoutes || []).some(r =>
-        (r.orders || []).some(o => o.lat && o.lng)
-      )
-      // Use confirmedRoutes only if they have geocoded orders, otherwise use distribution data
-      const routesToDraw = confirmedHasCoords ? confirmedRoutes : (distribution?.routes || [])
+      // Primary: confirmedRoutes (enriched with coords). Fallback: savedDistRoutes. Last resort: distribution.routes
+      const candidates = [
+        confirmedRoutes,
+        savedDistRoutesRef.current,
+        distribution?.routes
+      ]
+      let routesToDraw = []
+      for (const c of candidates) {
+        if (c && c.length > 0 && c.some(r => (r.orders || []).some(o => o.lat && o.lng))) {
+          routesToDraw = c
+          break
+        }
+      }
+      console.log('[Step 3 Map] routesToDraw:', routesToDraw.length, 'routes,',
+        routesToDraw.reduce((sum, r) => sum + (r.orders || []).filter(o => o.lat && o.lng).length, 0), 'orders with coords')
       const bounds = []
 
       routesToDraw.forEach((route, ri) => {
@@ -276,9 +285,17 @@ export default function RouteDistribution() {
     setDistributing(false)
   }
 
+  // Save distribution routes snapshot for step 3 map (persists even if distribution state changes)
+  const savedDistRoutesRef = useRef(null)
+
   const handleConfirm = async () => {
     if (!distribution) return
     setConfirming(true)
+    // Snapshot the distribution routes BEFORE sending to backend
+    savedDistRoutesRef.current = distribution.routes.map(r => ({
+      ...r,
+      orders: r.orders.map(o => ({ ...o }))
+    }))
     try {
       const { data } = await api.post('/routes/confirm', {
         routes: distribution.routes.map(r => ({
@@ -286,36 +303,31 @@ export default function RouteDistribution() {
           driverName: r.driverName,
           orders: r.orders.map(o => ({ id: o.id, routePosition: o.routePosition }))
         })),
-        date: new Date().toISOString()
+        date: new Date().toISOString(),
+        locationId: selectedLocationId
       })
-      // Merge backend response (id, linkToken, qrCode) with full order data from distribution
+      // Backend returns routes with id, linkToken, qrCode but maybe no orders with coords
+      // Merge backend metadata with our saved distribution routes that have full coords
       const backendRoutes = data.routes || []
+      const savedRoutes = savedDistRoutesRef.current || []
       const enrichedRoutes = backendRoutes.map((br, ri) => {
-        const distRoute = distribution.routes[ri]
-        const distOrders = distRoute?.orders || []
-        // Always use distOrders as the base (they have lat/lng from geocoding)
-        // Overlay backend metadata (id, status, etc) on top
-        const orders = distOrders.map((dOrder, oi) => {
-          // Try to find matching backend order by id or by index
-          const bo = (br.orders || []).find(o => o.id === dOrder.id) || (br.orders || [])[oi] || {}
-          return {
-            ...dOrder,
-            ...bo,
-            // Ensure lat/lng are never lost - distOrder always has them
-            lat: dOrder.lat,
-            lng: dOrder.lng,
-            customerName: dOrder.customerName || bo.customerName,
-            address: dOrder.address || bo.address,
-            routePosition: dOrder.routePosition || bo.routePosition || (oi + 1)
-          }
-        })
+        const savedRoute = savedRoutes[ri] || {}
+        const savedOrders = savedRoute.orders || []
         return {
           ...br,
-          orders,
-          driverName: br.driverName || distRoute?.driverName,
-          driverId: br.driverId || distRoute?.driverId
+          // Keep all backend fields (id, linkToken, qrCode, name, etc)
+          // But use saved orders which have lat/lng/customerName/address
+          orders: savedOrders.map((so, oi) => ({
+            ...so,
+            routePosition: so.routePosition || (oi + 1)
+          })),
+          driverName: br.driverName || savedRoute.driverName
         }
       })
+      console.log('[Step 3] enrichedRoutes:', JSON.stringify(enrichedRoutes.map(r => ({
+        name: r.name, ordersCount: r.orders?.length,
+        firstOrder: r.orders?.[0] ? { lat: r.orders[0].lat, lng: r.orders[0].lng, name: r.orders[0].customerName } : null
+      }))))
       setConfirmedRoutes(enrichedRoutes)
       setStep(3)
       toast.success('Rutas confirmadas y QR generados')
