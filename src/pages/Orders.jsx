@@ -567,7 +567,7 @@ function TNImportModal({ onClose, onImported }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} className="card-p w-full max-w-2xl space-y-4 max-h-[80vh] flex flex-col">
+      <div onClick={e => e.stopPropagation()} className="card-p w-full max-w-4xl space-y-4 max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-white">Importar pedidos de Tiendanube</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
@@ -643,48 +643,57 @@ function TNImportModal({ onClose, onImported }) {
         ) : (
           <>
             <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 text-gray-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selected.size === tnOrders.length}
-                  onChange={toggleAll}
-                  className="rounded border-navy-700 bg-navy-900 text-brand-500"
-                />
-                Seleccionar todos ({tnOrders.length})
-              </label>
+              <span className="text-gray-400">{tnOrders.length} pedidos encontrados</span>
               <span className="text-gray-500">{selected.size} seleccionados</span>
             </div>
 
-            <div className="overflow-y-auto flex-1 space-y-1 min-h-0">
-              {tnOrders.map(order => (
-                <label
-                  key={order.id}
-                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                    selected.has(order.id) ? 'border-brand-500/30 bg-brand-500/5' : 'border-navy-800 bg-navy-900/50 hover:border-navy-700'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.has(order.id)}
-                    onChange={() => toggleSelect(order.id)}
-                    className="rounded border-navy-700 bg-navy-900 text-brand-500"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-white">
-                        #{order.number || order.id} — {order.customer?.name || order.contact_name || 'Sin nombre'}
-                      </span>
-                      <span className="text-sm text-emerald-400 font-medium">
-                        {formatPrice(order.total, order.currency)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500 truncate mt-0.5">
-                      {order.shipping_address?.address || order.shipping_address?.street || 'Sin direccion'}
-                      {order.shipping_address?.city ? `, ${order.shipping_address.city}` : ''}
-                    </div>
-                  </div>
-                </label>
-              ))}
+            <div className="overflow-y-auto flex-1 min-h-0 border border-navy-800 rounded-lg">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-navy-900 z-10">
+                  <tr className="border-b border-navy-800 text-xs text-gray-500 uppercase tracking-wider">
+                    <th className="p-2 pl-3 text-left w-8">
+                      <input
+                        type="checkbox"
+                        checked={selected.size === tnOrders.length && tnOrders.length > 0}
+                        onChange={toggleAll}
+                        className="rounded border-navy-700 bg-navy-900 text-brand-500"
+                      />
+                    </th>
+                    <th className="p-2 text-left">Pedido</th>
+                    <th className="p-2 text-left">Cliente</th>
+                    <th className="p-2 text-left">Direccion</th>
+                    <th className="p-2 text-left">Ciudad</th>
+                    <th className="p-2 text-left">Envio</th>
+                    <th className="p-2 pr-3 text-right">Monto</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-navy-800/50">
+                  {tnOrders.map(order => (
+                    <tr
+                      key={order.id}
+                      onClick={() => toggleSelect(order.id)}
+                      className={`cursor-pointer transition-colors ${
+                        selected.has(order.id) ? 'bg-brand-500/5' : 'hover:bg-navy-800/30'
+                      }`}
+                    >
+                      <td className="p-2 pl-3">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(order.id)}
+                          onChange={() => toggleSelect(order.id)}
+                          className="rounded border-navy-700 bg-navy-900 text-brand-500"
+                        />
+                      </td>
+                      <td className="p-2 text-white font-mono text-xs">#{order.number || order.id}</td>
+                      <td className="p-2 text-gray-300 truncate max-w-[140px]">{order.customer?.name || order.contact_name || 'Sin nombre'}</td>
+                      <td className="p-2 text-gray-400 truncate max-w-[180px]">{order.shipping_address?.address || order.shipping_address?.street || '—'}</td>
+                      <td className="p-2 text-gray-400 truncate max-w-[100px]">{order.shipping_address?.city || '—'}</td>
+                      <td className="p-2 text-gray-400 truncate max-w-[120px] text-xs">{order.shipping_option || order.shipping || '—'}</td>
+                      <td className="p-2 pr-3 text-right text-emerald-400 font-medium whitespace-nowrap">{formatPrice(order.total, order.currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
             <div className="flex gap-2 justify-end pt-2 border-t border-navy-800">
