@@ -703,7 +703,7 @@ function TNImportModal({ onClose, onImported }) {
                         selected.has(order.id) ? 'bg-brand-500/5' : 'hover:bg-navy-800/30'
                       }`}
                     >
-                      <td className="p-2 pl-3">
+                      <td className="p-2 pl-3" onClick={e => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selected.has(order.id)}
