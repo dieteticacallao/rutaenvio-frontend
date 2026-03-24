@@ -513,7 +513,10 @@ function TNImportModal({ onClose, onImported }) {
     api.get('/tiendanube/orders', { params })
       .then(r => {
         const d = r.data
-        const list = Array.isArray(d) ? d : Array.isArray(d?.orders) ? d.orders : []
+        const list = Array.isArray(d) ? d
+          : Array.isArray(d?.data) ? d.data
+          : Array.isArray(d?.orders) ? d.orders
+          : []
         setTnOrders(list)
         setLoading(false)
       })
@@ -700,11 +703,11 @@ function TNImportModal({ onClose, onImported }) {
                           className="rounded border-navy-700 bg-navy-900 text-brand-500"
                         />
                       </td>
-                      <td className="p-2 text-white font-mono text-xs">#{order.number || order.id}</td>
-                      <td className="p-2 text-gray-300 truncate max-w-[140px]">{order.customer?.name || order.contact_name || 'Sin nombre'}</td>
-                      <td className="p-2 text-gray-400 truncate max-w-[180px]">{order.shipping_address?.address || order.shipping_address?.street || '—'}</td>
-                      <td className="p-2 text-gray-400 truncate max-w-[100px]">{order.shipping_address?.city || '—'}</td>
-                      <td className="p-2 text-gray-400 truncate max-w-[120px] text-xs">{order.shipping_option || order.shipping || '—'}</td>
+                      <td className="p-2 text-white font-mono text-xs">#{order.number || order.orderNumber || order.id}</td>
+                      <td className="p-2 text-gray-300 truncate max-w-[140px]">{order.customerName || order.customer?.name || order.contact_name || 'Sin nombre'}</td>
+                      <td className="p-2 text-gray-400 truncate max-w-[180px]">{order.address || order.shipping_address?.address || order.shipping_address?.street || '—'}</td>
+                      <td className="p-2 text-gray-400 truncate max-w-[100px]">{order.city || order.shipping_address?.city || '—'}</td>
+                      <td className="p-2 text-gray-400 truncate max-w-[120px] text-xs">{order.shippingMethod || order.shipping_option || order.shipping || '—'}</td>
                       <td className="p-2 pr-3 text-right text-emerald-400 font-medium whitespace-nowrap">{formatPrice(order.total, order.currency)}</td>
                     </tr>
                   ))}
