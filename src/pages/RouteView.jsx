@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { MapPin, Navigation, Phone, Package, CheckCircle2, Loader2, Camera, X, Truck, Clock } from 'lucide-react'
+import { MapPin, Navigation, Phone, Package, CheckCircle2, Loader2, Camera, X, Truck, Clock, Play } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -41,6 +41,7 @@ export default function RouteView() {
   const [photoPreview, setPhotoPreview] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [updatingOrder, setUpdatingOrder] = useState(null)
+  const [startingRoute, setStartingRoute] = useState(false)
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef({})
@@ -149,6 +150,27 @@ export default function RouteView() {
       })
     }).addTo(mapInstance.current)
     markersRef.current[orderId] = marker
+  }
+
+  const startRoute = async () => {
+    setStartingRoute(true)
+    try {
+      const loc = await getDriverLocation()
+      const body = loc ? { lat: loc.lat, lng: loc.lng } : {}
+      const r = await fetch(`${API}/driver-web/${token}/start`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      const data = await r.json()
+      if (data.success) {
+        setRoute(prev => ({ ...prev, startedAt: data.startedAt || new Date().toISOString() }))
+      }
+    } catch (err) {
+      console.error('Error iniciando ruta:', err)
+    } finally {
+      setStartingRoute(false)
+    }
   }
 
   const markInTransit = async (orderId) => {
@@ -268,9 +290,12 @@ export default function RouteView() {
   const totalOrders = route.orders.length
   const routeDate = route.date ? new Date(route.date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
 
+  // Route started check
+  const routeStarted = !!route.startedAt
+
   // Stats calculations
   const deliveredOrders = route.orders.filter(o => o.status === 'DELIVERED' && o.deliveredAt)
-  const routeStartTime = route.startedAt ? new Date(route.startedAt) : (route.createdAt ? new Date(route.createdAt) : null)
+  const routeStartTime = route.startedAt ? new Date(route.startedAt) : null
   const now = new Date()
   const lastDeliveryTime = deliveredOrders.length > 0
     ? new Date(Math.max(...deliveredOrders.map(o => new Date(o.deliveredAt).getTime())))
@@ -280,7 +305,7 @@ export default function RouteView() {
   const routeHours = Math.floor(routeMinutes / 60)
   const routeMins = routeMinutes % 60
   const avgMinutes = deliveredCount > 0 && routeStartTime
-    ? Math.round((( lastDeliveryTime || now) - routeStartTime) / 60000 / deliveredCount)
+    ? Math.round(((lastDeliveryTime || now) - routeStartTime) / 60000 / deliveredCount)
     : 0
 
   return (
@@ -313,17 +338,37 @@ export default function RouteView() {
           <div ref={mapRef} className="w-full h-full" />
         </div>
 
-        {/* Route Stats */}
-        {routeStartTime && (
+        {/* Start Route / Stats */}
+        {!routeStarted ? (
+          <div className="px-3 pt-4 pb-2">
+            <button
+              onClick={startRoute}
+              disabled={startingRoute}
+              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl bg-brand-500 text-white font-bold text-base hover:bg-brand-600 transition-colors disabled:opacity-50"
+            >
+              {startingRoute ? (
+                <><Loader2 size={22} className="animate-spin" /> Iniciando ruta...</>
+              ) : (
+                <><Play size={22} /> Iniciar ruta</>
+              )}
+            </button>
+          </div>
+        ) : (
           <div className="flex items-center justify-center gap-4 px-3 py-2.5 bg-navy-900 border-b border-navy-800 text-xs text-gray-400">
             <div className="flex items-center gap-1">
-              <Clock size={12} className="text-brand-400" />
-              <span>Tiempo en ruta: {routeHours}h {routeMins}m</span>
+              <Clock size={12} className="text-emerald-400" />
+              <span>Ruta iniciada a las {new Date(route.startedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} hs</span>
             </div>
-            <span className="text-navy-700">|</span>
-            <div>Promedio por entrega: {avgMinutes} min</div>
-            <span className="text-navy-700">|</span>
-            <div>Entregas: {deliveredCount}/{totalOrders}</div>
+            {deliveredCount > 0 && (
+              <>
+                <span className="text-navy-700">|</span>
+                <div>Tiempo en ruta: {routeHours}h {routeMins}m</div>
+                <span className="text-navy-700">|</span>
+                <div>Promedio: {avgMinutes} min</div>
+                <span className="text-navy-700">|</span>
+                <div>Entregas: {deliveredCount}/{totalOrders}</div>
+              </>
+            )}
           </div>
         )}
 
@@ -403,7 +448,7 @@ export default function RouteView() {
                       <Navigation size={13} /> Navegar
                     </button>
 
-                    {isPending && (
+                    {isPending && routeStarted && (
                       <button
                         onClick={() => markInTransit(order.id)}
                         disabled={isUpdating}

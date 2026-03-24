@@ -4,9 +4,10 @@ import { Clock, Package, QrCode, Copy, MessageCircle, ArrowLeft, ChevronRight, S
 import toast from 'react-hot-toast'
 
 const ROUTE_STATUS = {
-  CONFIRMED: { label: 'En progreso', className: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' },
-  IN_PROGRESS: { label: 'En progreso', className: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' },
-  COMPLETED: { label: 'Completada', className: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' },
+  PENDING: { label: 'Pendiente', className: 'bg-gray-500/10 text-gray-400 border border-gray-500/20' },
+  CONFIRMED: { label: 'En camino', className: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' },
+  IN_PROGRESS: { label: 'En camino', className: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' },
+  COMPLETED: { label: 'Finalizada', className: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' },
   CANCELLED: { label: 'Cancelada', className: 'bg-red-500/10 text-red-400 border border-red-500/20' }
 }
 
@@ -92,6 +93,58 @@ export default function RoutesHistory() {
     return orders.filter(o => o.status === 'DELIVERED').length
   }
 
+  const formatTime = (dateStr) => {
+    if (!dateStr) return '—'
+    return new Date(dateStr).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  const getDuration = (startStr, endStr) => {
+    if (!startStr) return '—'
+    const start = new Date(startStr)
+    const end = endStr ? new Date(endStr) : new Date()
+    const mins = Math.round((end - start) / 60000)
+    if (mins < 60) return `${mins} min`
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    return `${h}h ${m}m`
+  }
+
+  const getFinishTime = (route) => {
+    if (route.status === 'COMPLETED' && route.completedAt) return formatTime(route.completedAt)
+    if (route.status === 'COMPLETED' && route.finishedAt) return formatTime(route.finishedAt)
+    // For completed routes, use last delivery time
+    if (route.status === 'COMPLETED' && route.orders) {
+      const delivered = route.orders.filter(o => o.status === 'DELIVERED' && o.deliveredAt)
+      if (delivered.length > 0) {
+        const last = delivered.reduce((a, b) => new Date(a.deliveredAt) > new Date(b.deliveredAt) ? a : b)
+        return formatTime(last.deliveredAt)
+      }
+    }
+    // In progress: show ETA if available
+    if (['CONFIRMED', 'IN_PROGRESS'].includes(route.status)) {
+      if (route.estimatedEnd) return `ETA ${formatTime(route.estimatedEnd)}`
+      return 'En curso'
+    }
+    return '—'
+  }
+
+  const getRouteDuration = (route) => {
+    if (!route.startedAt) return '—'
+    if (route.status === 'COMPLETED') {
+      const endAt = route.completedAt || route.finishedAt
+      if (endAt) return getDuration(route.startedAt, endAt)
+      // Use last delivery
+      if (route.orders) {
+        const delivered = route.orders.filter(o => o.status === 'DELIVERED' && o.deliveredAt)
+        if (delivered.length > 0) {
+          const last = delivered.reduce((a, b) => new Date(a.deliveredAt) > new Date(b.deliveredAt) ? a : b)
+          return getDuration(route.startedAt, last.deliveredAt)
+        }
+      }
+    }
+    return getDuration(route.startedAt, null)
+  }
+
   const filteredRoutes = routes.filter(r => {
     if (!search) return true
     const q = search.toLowerCase()
@@ -99,7 +152,7 @@ export default function RoutesHistory() {
       r.name?.toLowerCase().includes(q) ||
       r.driver?.name?.toLowerCase().includes(q)
     )
-  })
+  }).sort((a, b) => new Date(b.date) - new Date(a.date))
 
   // Detail view
   if (selectedRoute) {
@@ -275,10 +328,12 @@ export default function RoutesHistory() {
             <thead>
               <tr className="border-b border-navy-800 text-left">
                 <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Ruta</th>
                 <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Cadete</th>
-                <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Pedidos</th>
                 <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Estado</th>
+                <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Inicio</th>
+                <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Fin</th>
+                <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Duracion</th>
+                <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Pedidos</th>
                 <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase text-right">Acciones</th>
               </tr>
             </thead>
@@ -290,20 +345,37 @@ export default function RoutesHistory() {
 
                 return (
                   <tr key={route.id} className="hover:bg-navy-800/30 transition-colors cursor-pointer" onClick={() => openDetail(route.id)}>
-                    <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap">
-                      {new Date(route.date).toLocaleDateString('es-AR')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm text-white font-medium truncate max-w-[200px]">{route.name}</div>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="text-sm text-white">{new Date(route.date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}</div>
+                      <div className="text-[10px] text-gray-600">{new Date(route.date).toLocaleDateString('es-AR', { weekday: 'short' })}</div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-300">
                       {route.driver?.name || '—'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-400">
-                      {delivered}/{total} entregados
-                    </td>
                     <td className="px-4 py-3">
                       {getStatusBadge(route.status)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap">
+                      {formatTime(route.startedAt)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap">
+                      {getFinishTime(route)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap">
+                      {getRouteDuration(route)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm text-white font-medium">{delivered}/{total}</span>
+                        {total > 0 && (
+                          <div className="w-16 h-1.5 bg-navy-800 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${delivered === total ? 'bg-emerald-400' : 'bg-brand-400'}`}
+                              style={{ width: `${(delivered / total) * 100}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
