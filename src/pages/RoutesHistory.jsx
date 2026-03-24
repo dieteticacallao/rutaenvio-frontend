@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api, STATUS_MAP } from '../lib/store'
-import { Clock, Package, QrCode, Copy, MessageCircle, ArrowLeft, ChevronRight, Search, Filter, XCircle, X, Printer, Trash2 } from 'lucide-react'
+import { Clock, Package, QrCode, Copy, MessageCircle, ArrowLeft, ChevronRight, Search, Filter, XCircle, X, Printer, Trash2, CheckCircle2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const ROUTE_STATUS_MAP = {
@@ -71,6 +71,27 @@ export default function RoutesHistory() {
       if (selectedRoute?.id === routeId) setSelectedRoute(null)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al eliminar')
+    }
+  }
+
+  const finishRoute = async (route) => {
+    const orders = route.orders || []
+    const delivered = orders.filter(o => o.status === 'DELIVERED').length
+    const total = orders.length
+    const pending = total - delivered
+    const msg = pending > 0
+      ? `Finalizar ruta? Se entregaron ${delivered} de ${total} pedidos. Los ${pending} pedidos no entregados volveran a Pendientes.`
+      : `Finalizar ruta? Se entregaron todos los ${total} pedidos.`
+    if (!window.confirm(msg)) return
+    try {
+      await api.post(`/routes/${route.id}/finish`)
+      toast.success('Ruta finalizada')
+      fetchRoutes()
+      if (selectedRoute?.id === route.id) {
+        openDetail(route.id)
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al finalizar la ruta')
     }
   }
 
@@ -211,7 +232,15 @@ export default function RoutesHistory() {
             >
               <Printer size={14} /> Imprimir etiquetas
             </button>
-            {hasUndelivered(selectedRoute.orders) && selectedRoute.status !== 'CANCELLED' && (
+            {computeRouteStatus(selectedRoute) === 'IN_PROGRESS' && (
+              <button
+                onClick={() => finishRoute(selectedRoute)}
+                className="btn-secondary text-xs text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+              >
+                <CheckCircle2 size={14} /> Finalizar ruta
+              </button>
+            )}
+            {hasUndelivered(selectedRoute.orders) && selectedRoute.status !== 'CANCELLED' && computeRouteStatus(selectedRoute) !== 'COMPLETED' && (
               <button
                 onClick={() => cancelRoute(selectedRoute.id)}
                 className="btn-secondary text-xs text-red-400 border-red-500/30 hover:bg-red-500/10"
@@ -455,7 +484,16 @@ export default function RoutesHistory() {
                         >
                           <Printer size={16} />
                         </button>
-                        {hasUndelivered(route.orders) && route.status !== 'CANCELLED' && (
+                        {computeRouteStatus(route) === 'IN_PROGRESS' && (
+                          <button
+                            onClick={() => finishRoute(route)}
+                            className="text-gray-500 hover:text-emerald-400 transition-colors p-1.5 rounded-lg hover:bg-emerald-500/10"
+                            title="Finalizar ruta"
+                          >
+                            <CheckCircle2 size={16} />
+                          </button>
+                        )}
+                        {hasUndelivered(route.orders) && route.status !== 'CANCELLED' && computeRouteStatus(route) !== 'COMPLETED' && (
                           <button
                             onClick={() => cancelRoute(route.id)}
                             className="text-gray-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-500/10"

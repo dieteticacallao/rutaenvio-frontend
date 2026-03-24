@@ -79,7 +79,7 @@ export default function Layout({ children }) {
                 Distribuir
               </NavLink>
               <NavLink to="/routes/history" className={({ isActive }) => subLinkClass(isActive)}>
-                <Clock size={14} />
+                <Truck size={14} />
                 Rutas
               </NavLink>
             </div>
