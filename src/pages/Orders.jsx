@@ -486,10 +486,8 @@ function ExcelImportModal({ onClose, onImported }) {
 
 function toLocalDate(date) {
   const d = date || new Date()
-  const year = d.toLocaleString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric' })
-  const month = d.toLocaleString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', month: '2-digit' })
-  const day = d.toLocaleString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit' })
-  return `${year}-${month}-${day}`
+  // sv-SE locale always outputs YYYY-MM-DD
+  return d.toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
 }
 
 function TNImportModal({ onClose, onImported }) {
@@ -618,15 +616,15 @@ function TNImportModal({ onClose, onImported }) {
                 <input
                   type="date"
                   value={dateFrom}
-                  onChange={e => setDateFrom(e.target.value)}
-                  className="input text-xs py-1.5 px-2"
+                  onChange={e => { if (e.target.value) setDateFrom(e.target.value) }}
+                  className="input text-xs py-1.5 px-2 cursor-pointer [color-scheme:dark]"
                 />
                 <label className="text-xs text-gray-500">Hasta</label>
                 <input
                   type="date"
                   value={dateTo}
-                  onChange={e => setDateTo(e.target.value)}
-                  className="input text-xs py-1.5 px-2"
+                  onChange={e => { if (e.target.value) setDateTo(e.target.value) }}
+                  className="input text-xs py-1.5 px-2 cursor-pointer [color-scheme:dark]"
                 />
               </div>
             </div>
