@@ -1,16 +1,27 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api, useAuth } from '../lib/store'
-import { Settings as SettingsIcon, Store, MessageCircle, Link2, Check, AlertCircle, MapPin, Plus, Star, Trash2 } from 'lucide-react'
+import { Settings as SettingsIcon, Store, MessageCircle, Link2, Check, AlertCircle, MapPin, Plus, Star, Trash2, Unplug } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
   const { business } = useAuth()
   const [settings, setSettings] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   useEffect(() => {
     api.get('/dashboard/settings').then(r => { setSettings(r.data); setLoading(false) })
   }, [])
+
+  useEffect(() => {
+    if (searchParams.get('tn') === 'success') {
+      toast.success('Tiendanube conectada correctamente')
+      searchParams.delete('tn')
+      setSearchParams(searchParams, { replace: true })
+      api.get('/dashboard/settings').then(r => setSettings(r.data))
+    }
+  }, [searchParams, setSearchParams])
 
   if (loading) return <div className="flex items-center justify-center h-96 text-gray-500">Cargando...</div>
 
@@ -45,7 +56,7 @@ export default function Settings() {
       <LocationsSection />
 
       {/* Tiendanube integration */}
-      <TiendanubeSection connected={settings?.integrations?.tiendanube} />
+      <TiendanubeSection settings={settings} onSettingsUpdate={() => api.get('/dashboard/settings').then(r => setSettings(r.data))} />
 
       {/* WhatsApp integration */}
       <WhatsAppSection connected={settings?.integrations?.whatsapp} />
@@ -203,23 +214,26 @@ function LocationsSection() {
   )
 }
 
-function TiendanubeSection({ connected }) {
-  const [form, setForm] = useState({ storeId: '', accessToken: '' })
-  const [connecting, setConnecting] = useState(false)
-  const [showForm, setShowForm] = useState(false)
-  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
+function TiendanubeSection({ settings, onSettingsUpdate }) {
+  const { business } = useAuth()
+  const tnStoreId = settings?.tnStoreId
+  const [disconnecting, setDisconnecting] = useState(false)
 
-  const connect = async (e) => {
-    e.preventDefault()
-    setConnecting(true)
+  const handleConnect = () => {
+    const apiUrl = (import.meta.env.VITE_API_URL || '/api').replace('/api', '')
+    window.location.href = apiUrl + '/api/tiendanube/install?businessId=' + business.id
+  }
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true)
     try {
-      const { data } = await api.post('/dashboard/settings/tiendanube', form)
-      toast.success(data.message)
-      setShowForm(false)
+      await api.post('/dashboard/settings/tiendanube/disconnect')
+      toast.success('Tiendanube desconectada')
+      onSettingsUpdate()
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Error al conectar')
+      toast.error(err.response?.data?.error || 'Error al desconectar')
     }
-    setConnecting(false)
+    setDisconnecting(false)
   }
 
   return (
@@ -228,33 +242,29 @@ function TiendanubeSection({ connected }) {
         <h3 className="font-semibold text-white flex items-center gap-2">
           <Link2 size={18} /> Tiendanube
         </h3>
-        {connected ? (
+        {tnStoreId ? (
           <span className="badge bg-emerald-500/10 text-emerald-400"><Check size={12} /> Conectada</span>
         ) : (
           <span className="badge bg-amber-500/10 text-amber-400"><AlertCircle size={12} /> No conectada</span>
         )}
       </div>
 
-      <p className="text-sm text-gray-500">
-        {connected
-          ? 'Las órdenes pagadas se importan automáticamente vía webhook.'
-          : 'Conectá tu Tiendanube para importar pedidos automáticamente.'}
-      </p>
-
-      {!connected && !showForm && (
-        <button onClick={() => setShowForm(true)} className="btn-secondary">Conectar Tiendanube</button>
-      )}
-
-      {showForm && (
-        <form onSubmit={connect} className="space-y-3 pt-2 border-t border-navy-800">
-          <div><label className="label">Store ID</label><input className="input" placeholder="Tu ID de tienda" value={form.storeId} onChange={set('storeId')} required /></div>
-          <div><label className="label">Access Token</label><input className="input" type="password" placeholder="Token de acceso a la API" value={form.accessToken} onChange={set('accessToken')} required /></div>
-          <p className="text-xs text-gray-500">Encontras estos datos en Tiendanube, seccion Configuracion, API / Integraciones</p>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancelar</button>
-            <button type="submit" disabled={connecting} className="btn-primary">{connecting ? 'Conectando...' : 'Conectar'}</button>
-          </div>
-        </form>
+      {tnStoreId ? (
+        <>
+          <p className="text-sm text-gray-500">
+            Tienda conectada (Store ID: {tnStoreId}). Las ordenes pagadas se importan automaticamente via webhook.
+          </p>
+          <button onClick={handleDisconnect} disabled={disconnecting} className="btn-secondary text-red-400 hover:text-red-300">
+            <Unplug size={16} /> {disconnecting ? 'Desconectando...' : 'Desconectar'}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-gray-500">
+            Conecta tu Tiendanube para importar pedidos automaticamente.
+          </p>
+          <button onClick={handleConnect} className="btn-secondary">Conectar Tiendanube</button>
+        </>
       )}
     </div>
   )
