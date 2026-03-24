@@ -79,9 +79,10 @@ export default function RoutesHistory() {
     const delivered = orders.filter(o => o.status === 'DELIVERED').length
     const total = orders.length
     const pending = total - delivered
+    const driverName = route.driver?.name || route.driverName || 'cadete'
     const msg = pending > 0
-      ? `Finalizar ruta? Se entregaron ${delivered} de ${total} pedidos. Los ${pending} pedidos no entregados volveran a Pendientes.`
-      : `Finalizar ruta? Se entregaron todos los ${total} pedidos.`
+      ? `Finalizar ruta de ${driverName}? Se entregaron ${delivered} de ${total} pedidos. Los ${pending} pedidos no entregados volveran a Pendientes para poder reprogramarlos.`
+      : `Finalizar ruta de ${driverName}? Se entregaron todos los ${total} pedidos.`
     if (!window.confirm(msg)) return
     try {
       await api.post(`/routes/${route.id}/finish`)
