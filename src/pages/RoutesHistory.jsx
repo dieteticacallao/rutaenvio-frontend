@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { api, STATUS_MAP } from '../lib/store'
-import { Clock, Package, QrCode, Copy, MessageCircle, ArrowLeft, ChevronRight, Search, Filter, XCircle, X, Printer } from 'lucide-react'
+import { Clock, Package, QrCode, Copy, MessageCircle, ArrowLeft, ChevronRight, Search, Filter, XCircle, X, Printer, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-const ROUTE_STATUS = {
-  PENDING: { label: 'Pendiente', className: 'bg-gray-500/10 text-gray-400 border border-gray-500/20' },
+const ROUTE_STATUS_MAP = {
+  PENDING: { label: 'Pendiente', className: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' },
   CONFIRMED: { label: 'En camino', className: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' },
   IN_PROGRESS: { label: 'En camino', className: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' },
   COMPLETED: { label: 'Finalizada', className: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' },
@@ -62,6 +62,18 @@ export default function RoutesHistory() {
     }
   }
 
+  const deleteRoute = async (routeId) => {
+    if (!window.confirm('Eliminar esta ruta del historial?')) return
+    try {
+      await api.delete(`/routes/${routeId}`)
+      toast.success('Ruta eliminada')
+      setRoutes(prev => prev.filter(r => r.id !== routeId))
+      if (selectedRoute?.id === routeId) setSelectedRoute(null)
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al eliminar')
+    }
+  }
+
   const removeOrder = async (routeId, orderId, customerName) => {
     if (!window.confirm(`Sacar el pedido de ${customerName} de esta ruta?`)) return
     try {
@@ -83,9 +95,26 @@ export default function RoutesHistory() {
     return `${window.location.origin}/ruta/${route.linkToken}`
   }
 
-  const getStatusBadge = (status) => {
-    const s = ROUTE_STATUS[status] || { label: status, className: 'bg-navy-800 text-gray-400' }
-    return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.className}`}>{s.label}</span>
+  const computeRouteStatus = (route) => {
+    // If backend provides status, use it but validate
+    if (route.status === 'CANCELLED') return 'CANCELLED'
+    if (route.status === 'COMPLETED') return 'COMPLETED'
+
+    // Calculate from data
+    const orders = route.orders || []
+    const total = orders.length || route.totalOrders || 0
+    const delivered = orders.filter(o => o.status === 'DELIVERED').length
+
+    if (total > 0 && delivered === total) return 'COMPLETED'
+    if (route.startedAt) return 'IN_PROGRESS'
+    if (route.status === 'CONFIRMED' || route.status === 'IN_PROGRESS') return 'IN_PROGRESS'
+    return 'PENDING'
+  }
+
+  const getStatusBadge = (route) => {
+    const key = typeof route === 'string' ? route : computeRouteStatus(route)
+    const s = ROUTE_STATUS_MAP[key] || { label: key, className: 'bg-navy-800 text-gray-400 border border-navy-700' }
+    return <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${s.className}`}>{s.label}</span>
   }
 
   const getDeliveredCount = (orders) => {
@@ -146,6 +175,9 @@ export default function RoutesHistory() {
   }
 
   const filteredRoutes = routes.filter(r => {
+    // Hide routes with 0 orders
+    const total = r.orders?.length || r.totalOrders || 0
+    if (total === 0) return false
     if (!search) return true
     const q = search.toLowerCase()
     return (
@@ -187,7 +219,7 @@ export default function RoutesHistory() {
                 <XCircle size={14} /> Cancelar ruta
               </button>
             )}
-            {getStatusBadge(selectedRoute.status)}
+            {getStatusBadge(selectedRoute)}
           </div>
         </div>
 
@@ -359,7 +391,7 @@ export default function RoutesHistory() {
                       {route.driver?.name || '—'}
                     </td>
                     <td className="px-4 py-3">
-                      {getStatusBadge(route.status)}
+                      {getStatusBadge(route)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap">
                       {formatTime(route.startedAt)}
@@ -419,6 +451,13 @@ export default function RoutesHistory() {
                             <XCircle size={16} />
                           </button>
                         )}
+                        <button
+                          onClick={() => deleteRoute(route.id)}
+                          className="text-gray-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-500/10"
+                          title="Eliminar ruta"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                         <ChevronRight size={16} className="text-gray-600 ml-1" />
                       </div>
                     </td>
