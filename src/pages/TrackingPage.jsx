@@ -13,6 +13,21 @@ const STEPS = [
 
 const STATUS_INDEX = { PENDING: 0, ASSIGNED: 1, PICKED_UP: 1, IN_TRANSIT: 2, ARRIVED: 2, DELIVERED: 3, FAILED: -1, CANCELLED: -1 }
 
+// Map event types to timeline step keys
+const EVENT_TO_STEP = {
+  CREATED: 'PENDING',
+  ASSIGNED: 'ASSIGNED',
+  PICKED_UP: 'ASSIGNED',
+  IN_TRANSIT: 'IN_TRANSIT',
+  ARRIVED: 'IN_TRANSIT',
+  DELIVERED: 'DELIVERED',
+}
+
+function formatEventTime(dateStr) {
+  if (!dateStr) return ''
+  return new Date(dateStr).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs'
+}
+
 export default function TrackingPage() {
   const { trackingCode } = useParams()
   const [order, setOrder] = useState(null)
@@ -57,7 +72,7 @@ export default function TrackingPage() {
     if (trackingCode) fetchOrder()
   }, [trackingCode, fetchOrder])
 
-  // Auto-refresh every 30 seconds
+  // Auto-refresh every 30 seconds (lightweight, just fetches order data with events)
   useEffect(() => {
     if (!trackingCode || error) return
     intervalRef.current = setInterval(() => {
@@ -98,19 +113,38 @@ export default function TrackingPage() {
     }
   }, [order?.id])
 
-  // Update driver marker when driverLat/driverLng change
+  // Update driver marker from last event with coordinates
   useEffect(() => {
-    if (!mapInstance.current || !order?.driverLat || !order?.driverLng) return
+    if (!mapInstance.current || !order) return
     const L = window.L
     if (!L) return
 
+    // Find the last event with lat/lng
+    const events = order.events || []
+    const lastLocEvent = [...events].reverse().find(e => e.lat && e.lng)
+
+    if (!lastLocEvent) {
+      // Fallback to driverLat/driverLng if available
+      if (!order.driverLat || !order.driverLng) return
+      updateDriverMarker(L, order.driverLat, order.driverLng)
+      return
+    }
+
+    updateDriverMarker(L, lastLocEvent.lat, lastLocEvent.lng)
+  }, [order?.events, order?.driverLat, order?.driverLng])
+
+  function updateDriverMarker(L, lat, lng) {
+    if (!mapInstance.current) return
+    const isTransit = order?.status === 'IN_TRANSIT' || order?.status === 'ARRIVED'
+    if (!isTransit) return
+
     if (driverMarkerRef.current) {
-      driverMarkerRef.current.setLatLng([order.driverLat, order.driverLng])
+      driverMarkerRef.current.setLatLng([lat, lng])
     } else {
-      driverMarkerRef.current = L.marker([order.driverLat, order.driverLng], {
+      driverMarkerRef.current = L.marker([lat, lng], {
         icon: L.divIcon({
           className: '',
-          html: '<div style="width:40px;height:40px;background:#0ea5e9;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 16px rgba(14,165,233,0.5)">🏍</div>',
+          html: '<div style="width:40px;height:40px;background:#0ea5e9;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 16px rgba(14,165,233,0.5)">\uD83C\uDFCD</div>',
           iconSize: [40, 40],
           iconAnchor: [20, 20]
         }),
@@ -126,7 +160,7 @@ export default function TrackingPage() {
       ])
       mapInstance.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 })
     }
-  }, [order?.driverLat, order?.driverLng])
+  }
 
   const submitRating = async () => {
     if (!rating) return
@@ -142,6 +176,32 @@ export default function TrackingPage() {
       console.error(e)
     }
     setSubmittingRating(false)
+  }
+
+  // Build event times map: step key -> time string
+  function getEventTimes() {
+    const events = order?.events || []
+    const times = {}
+    for (const ev of events) {
+      const stepKey = EVENT_TO_STEP[ev.type] || EVENT_TO_STEP[ev.status] || ev.type
+      if (stepKey && !times[stepKey]) {
+        times[stepKey] = formatEventTime(ev.createdAt || ev.timestamp)
+      }
+    }
+    // Fallback: use order-level timestamps
+    if (!times['PENDING'] && order?.createdAt) {
+      times['PENDING'] = formatEventTime(order.createdAt)
+    }
+    if (!times['ASSIGNED'] && order?.assignedAt) {
+      times['ASSIGNED'] = formatEventTime(order.assignedAt)
+    }
+    if (!times['IN_TRANSIT'] && order?.inTransitAt) {
+      times['IN_TRANSIT'] = formatEventTime(order.inTransitAt)
+    }
+    if (!times['DELIVERED'] && order?.deliveredAt) {
+      times['DELIVERED'] = formatEventTime(order.deliveredAt)
+    }
+    return times
   }
 
   // Loading state
@@ -173,6 +233,7 @@ export default function TrackingPage() {
   const isTransit = order.status === 'IN_TRANSIT' || order.status === 'ARRIVED'
   const isDelivered = order.status === 'DELIVERED'
   const isCancelled = order.status === 'CANCELLED' || order.status === 'FAILED'
+  const eventTimes = getEventTimes()
 
   // ETA calculations
   const etaMinutes = order.estimatedMinutes || null
@@ -188,6 +249,11 @@ export default function TrackingPage() {
     const fmt = (d) => d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
     return `${fmt(minTime)} y ${fmt(maxTime)}`
   }
+
+  // Check if driver location is available from events
+  const events = order.events || []
+  const lastLocEvent = [...events].reverse().find(e => e.lat && e.lng)
+  const hasDriverLocation = isTransit && (lastLocEvent || (order.driverLat && order.driverLng))
 
   return (
     <div className="min-h-screen bg-navy-950 pb-8">
@@ -303,7 +369,7 @@ export default function TrackingPage() {
           )}
         </div>
 
-        {/* Timeline Progress Bar */}
+        {/* Timeline Progress Bar with event times */}
         {!isCancelled && (
           <div className="px-5 pb-6">
             <div className="flex items-center justify-between relative">
@@ -319,6 +385,7 @@ export default function TrackingPage() {
                 const done = i <= currentStep && currentStep >= 0
                 const active = i === currentStep
                 const StepIcon = step.icon
+                const time = eventTimes[step.key]
                 return (
                   <div key={step.key} className="flex flex-col items-center relative z-10" style={{ flex: '1 1 0' }}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${
@@ -335,6 +402,9 @@ export default function TrackingPage() {
                     }`}>
                       {step.label}
                     </span>
+                    {done && time && (
+                      <span className="text-[9px] text-gray-500 mt-0.5">{time}</span>
+                    )}
                   </div>
                 )
               })}
@@ -342,7 +412,7 @@ export default function TrackingPage() {
           </div>
         )}
 
-        {/* Map (IN_TRANSIT only) */}
+        {/* Map (IN_TRANSIT only, show if we have destination or driver location) */}
         {isTransit && order.lat && order.lng && (
           <div className="mx-4 mb-4 rounded-xl overflow-hidden border border-navy-800" style={{ height: '200px' }}>
             <div ref={mapRef} className="w-full h-full" />

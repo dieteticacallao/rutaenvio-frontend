@@ -9,10 +9,24 @@ const STATUS_CONFIG = {
   ASSIGNED: { label: 'Asignado', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
   PICKED_UP: { label: 'Retirado', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
   IN_TRANSIT: { label: 'En camino', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  ARRIVED: { label: 'Llegó', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  ARRIVED: { label: 'Llego', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   DELIVERED: { label: 'Entregado', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
   FAILED: { label: 'Fallido', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
   CANCELLED: { label: 'Cancelado', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+}
+
+function getDriverLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null)
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    )
+  })
 }
 
 export default function RouteView() {
@@ -30,8 +44,6 @@ export default function RouteView() {
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef({})
-  const driverMarkerRef = useRef(null)
-  const watchIdRef = useRef(null)
 
   const fetchRoute = useCallback(async () => {
     try {
@@ -105,56 +117,13 @@ export default function RouteView() {
     }
   }, [route?.id])
 
-  // Geolocation: watch driver position and send to server
-  useEffect(() => {
-    if (!route || !token || !navigator.geolocation) return
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords
-        // Send location to API
-        fetch(`${API}/driver-web/${token}/location`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lat: latitude, lng: longitude })
-        }).catch(() => {})
-
-        // Update driver marker on map
-        const L = window.L
-        if (!L || !mapInstance.current) return
-
-        if (driverMarkerRef.current) {
-          driverMarkerRef.current.setLatLng([latitude, longitude])
-        } else {
-          driverMarkerRef.current = L.marker([latitude, longitude], {
-            icon: L.divIcon({
-              className: '',
-              html: '<div style="width:36px;height:36px;background:#0ea5e9;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 12px rgba(14,165,233,0.5)">🏍</div>',
-              iconSize: [36, 36],
-              iconAnchor: [18, 18]
-            }),
-            zIndexOffset: 1000
-          }).addTo(mapInstance.current)
-        }
-      },
-      () => {},
-      { enableHighAccuracy: false, maximumAge: 30000 }
-    )
-
-    return () => {
-      if (watchIdRef.current != null) {
-        navigator.geolocation.clearWatch(watchIdRef.current)
-      }
-    }
-  }, [route?.id, token])
-
   function addOrderMarker(L, order, bounds) {
     if (!order.lat || !order.lng) return
     const color = order.status === 'DELIVERED' ? '#10b981' : order.status === 'IN_TRANSIT' ? '#3b82f6' : '#f59e0b'
     const marker = L.marker([order.lat, order.lng], {
       icon: L.divIcon({
         className: '',
-        html: `<div style="width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 2px 6px ${color}60">${order.status === 'DELIVERED' ? '✓' : order.routePosition}</div>`,
+        html: `<div style="width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 2px 6px ${color}60">${order.status === 'DELIVERED' ? '\u2713' : order.routePosition}</div>`,
         iconSize: [28, 28],
         iconAnchor: [14, 14]
       })
@@ -174,7 +143,7 @@ export default function RouteView() {
     const marker = L.marker([order.lat, order.lng], {
       icon: L.divIcon({
         className: '',
-        html: `<div style="width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 2px 6px ${color}60">${status === 'DELIVERED' ? '✓' : order.routePosition}</div>`,
+        html: `<div style="width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 2px 6px ${color}60">${status === 'DELIVERED' ? '\u2713' : order.routePosition}</div>`,
         iconSize: [28, 28],
         iconAnchor: [14, 14]
       })
@@ -185,7 +154,13 @@ export default function RouteView() {
   const markInTransit = async (orderId) => {
     setUpdatingOrder(orderId)
     try {
-      const r = await fetch(`${API}/driver-web/${token}/order/${orderId}/transit`, { method: 'PUT' })
+      const loc = await getDriverLocation()
+      const body = loc ? { lat: loc.lat, lng: loc.lng } : {}
+      const r = await fetch(`${API}/driver-web/${token}/order/${orderId}/transit`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
       const data = await r.json()
       if (data.success) {
         setRoute(prev => ({
@@ -223,7 +198,16 @@ export default function RouteView() {
     if (!receiverName.trim() || !receiverDni.trim()) return
     setSubmitting(true)
     try {
-      const body = { receiverName: receiverName.trim(), receiverDni: receiverDni.trim(), deliveryPhoto: photoPreview || null }
+      const loc = await getDriverLocation()
+      const body = {
+        receiverName: receiverName.trim(),
+        receiverDni: receiverDni.trim(),
+        deliveryPhoto: photoPreview || null
+      }
+      if (loc) {
+        body.lat = loc.lat
+        body.lng = loc.lng
+      }
       const r = await fetch(`${API}/driver-web/${token}/order/${deliverModal.id}/deliver`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -284,6 +268,21 @@ export default function RouteView() {
   const totalOrders = route.orders.length
   const routeDate = route.date ? new Date(route.date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
 
+  // Stats calculations
+  const deliveredOrders = route.orders.filter(o => o.status === 'DELIVERED' && o.deliveredAt)
+  const routeStartTime = route.startedAt ? new Date(route.startedAt) : (route.createdAt ? new Date(route.createdAt) : null)
+  const now = new Date()
+  const lastDeliveryTime = deliveredOrders.length > 0
+    ? new Date(Math.max(...deliveredOrders.map(o => new Date(o.deliveredAt).getTime())))
+    : null
+  const endTime = deliveredCount === totalOrders && lastDeliveryTime ? lastDeliveryTime : now
+  const routeMinutes = routeStartTime ? Math.round((endTime - routeStartTime) / 60000) : 0
+  const routeHours = Math.floor(routeMinutes / 60)
+  const routeMins = routeMinutes % 60
+  const avgMinutes = deliveredCount > 0 && routeStartTime
+    ? Math.round((( lastDeliveryTime || now) - routeStartTime) / 60000 / deliveredCount)
+    : 0
+
   return (
     <div className="min-h-screen bg-navy-950 pb-8">
       {/* Header */}
@@ -313,6 +312,20 @@ export default function RouteView() {
         <div className="border-b border-navy-800" style={{ height: '260px' }}>
           <div ref={mapRef} className="w-full h-full" />
         </div>
+
+        {/* Route Stats */}
+        {routeStartTime && (
+          <div className="flex items-center justify-center gap-4 px-3 py-2.5 bg-navy-900 border-b border-navy-800 text-xs text-gray-400">
+            <div className="flex items-center gap-1">
+              <Clock size={12} className="text-brand-400" />
+              <span>Tiempo en ruta: {routeHours}h {routeMins}m</span>
+            </div>
+            <span className="text-navy-700">|</span>
+            <div>Promedio por entrega: {avgMinutes} min</div>
+            <span className="text-navy-700">|</span>
+            <div>Entregas: {deliveredCount}/{totalOrders}</div>
+          </div>
+        )}
 
         {/* Orders list */}
         <div className="px-3 pt-3 space-y-2">
@@ -364,14 +377,14 @@ export default function RouteView() {
                   </div>
                 )}
 
-                {/* Delivered info */}
+                {/* Delivered info with time */}
                 {isDelivered && (
                   <div className="mt-2 text-xs text-emerald-400/70 flex items-center gap-1">
                     <CheckCircle2 size={12} />
-                    Entregado
+                    <span>Entregado</span>
                     {order.deliveredAt && (
-                      <span className="text-gray-600 ml-1">
-                        {new Date(order.deliveredAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                      <span className="text-emerald-400 font-medium ml-1">
+                        {new Date(order.deliveredAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} hs
                       </span>
                     )}
                     {order.receiverName && (
