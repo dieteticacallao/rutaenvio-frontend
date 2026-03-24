@@ -186,13 +186,12 @@ export default function RouteView() {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText) => {
-          // QR detected
+          // QR detected - try to parse orderId
           let orderId = null
           try {
             const parsed = JSON.parse(decodedText)
             orderId = parsed.orderId || parsed.id
           } catch {
-            // Maybe raw orderId string
             const found = route?.orders?.find(o => String(o.id) === decodedText)
             if (found) orderId = found.id
           }
@@ -202,18 +201,15 @@ export default function RouteView() {
           setScanModalOrder(null)
           if (orderId) {
             confirmPickup(orderId)
-          } else {
-            // Could not parse, confirm the current order
-            confirmPickup(scanModalOrder.id)
           }
+          // If QR could not be parsed, do NOT auto-confirm. User can retry or use manual.
         },
         () => {} // ignore scan errors (no QR found yet)
       ).catch(() => {
-        // Camera not available, fallback: confirm manually
+        // Camera not available - just close scanner, do NOT auto-confirm
         scanner.clear()
         scannerRef.current = null
         setScanModalOrder(null)
-        confirmPickup(scanModalOrder.id)
       })
     }, 100)
     return () => {
@@ -550,7 +546,11 @@ export default function RouteView() {
                       Escanear retiro
                     </button>
                     <button
-                      onClick={() => confirmPickup(order.id)}
+                      onClick={() => {
+                        if (window.confirm(`Confirmar retiro manual del pedido #${order.routePosition} de ${order.customerName}?`)) {
+                          confirmPickup(order.id)
+                        }
+                      }}
                       disabled={isPickingUpThis}
                       className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-navy-800 text-amber-400 hover:bg-navy-700 transition-colors text-xs font-medium border border-amber-500/30 disabled:opacity-50"
                     >

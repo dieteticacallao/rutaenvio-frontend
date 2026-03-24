@@ -273,7 +273,16 @@ export default function RouteDistribution() {
         })),
         date: new Date().toISOString()
       })
-      setConfirmedRoutes(data.routes)
+      // Merge backend response with coordinate data from distribution
+      const enrichedRoutes = (data.routes || []).map((backendRoute, ri) => {
+        const distRoute = distribution.routes[ri]
+        const ordersWithCoords = (backendRoute.orders || []).map(bo => {
+          const distOrder = distRoute?.orders?.find(o => o.id === bo.id) || {}
+          return { ...distOrder, ...bo, lat: bo.lat || distOrder.lat, lng: bo.lng || distOrder.lng }
+        })
+        return { ...backendRoute, orders: ordersWithCoords, driverName: backendRoute.driverName || distRoute?.driverName }
+      })
+      setConfirmedRoutes(enrichedRoutes)
       setStep(3)
       toast.success('Rutas confirmadas y QR generados')
     } catch (err) {
@@ -544,7 +553,10 @@ export default function RouteDistribution() {
                           </a>
                         )}
                         <button
-                          onClick={() => window.open(`${api.defaults.baseURL}/routes/${route.id}/labels`, '_blank')}
+                          onClick={() => {
+                            const base = (api.defaults.baseURL || '/api').replace(/\/$/, '')
+                            window.open(`${base}/routes/${route.id}/labels`, '_blank')
+                          }}
                           className="btn-secondary text-xs"
                         >
                           <Printer size={14} /> Imprimir etiquetas
