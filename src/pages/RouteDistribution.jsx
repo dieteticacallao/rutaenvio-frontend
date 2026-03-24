@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api, ROUTE_COLORS } from '../lib/store'
-import { Route, Users, Zap, Check, QrCode, ArrowRight, RotateCcw, Package, MapPin, X, Copy, MessageCircle } from 'lucide-react'
+import { Route, Users, Zap, Check, QrCode, ArrowRight, RotateCcw, Package, MapPin, X, Copy, MessageCircle, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function RouteDistribution() {
@@ -475,7 +475,7 @@ export default function RouteDistribution() {
                           <Copy size={14} />
                         </button>
                       </div>
-                      <div className="flex gap-2 justify-center">
+                      <div className="flex gap-2 justify-center flex-wrap">
                         <button
                           onClick={() => { navigator.clipboard.writeText(routeLink); toast.success('Link copiado') }}
                           className="btn-secondary text-xs"
@@ -492,6 +492,12 @@ export default function RouteDistribution() {
                             <MessageCircle size={14} /> Enviar por WhatsApp
                           </a>
                         )}
+                        <button
+                          onClick={() => window.open(`${api.defaults.baseURL}/routes/${route.id}/labels`, '_blank')}
+                          className="btn-secondary text-xs"
+                        >
+                          <Printer size={14} /> Imprimir etiquetas
+                        </button>
                       </div>
                     </div>
                   )}

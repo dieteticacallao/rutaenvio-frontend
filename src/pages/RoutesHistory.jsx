@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api, STATUS_MAP } from '../lib/store'
-import { Clock, Package, QrCode, Copy, MessageCircle, ArrowLeft, ChevronRight, Search, Filter, XCircle, X } from 'lucide-react'
+import { Clock, Package, QrCode, Copy, MessageCircle, ArrowLeft, ChevronRight, Search, Filter, XCircle, X, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const ROUTE_STATUS = {
@@ -173,6 +173,12 @@ export default function RoutesHistory() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.open(`${api.defaults.baseURL}/routes/${selectedRoute.id}/labels`, '_blank')}
+              className="btn-secondary text-xs"
+            >
+              <Printer size={14} /> Imprimir etiquetas
+            </button>
             {hasUndelivered(selectedRoute.orders) && selectedRoute.status !== 'CANCELLED' && (
               <button
                 onClick={() => cancelRoute(selectedRoute.id)}
@@ -397,6 +403,13 @@ export default function RoutesHistory() {
                             <Copy size={16} />
                           </button>
                         )}
+                        <button
+                          onClick={() => window.open(`${api.defaults.baseURL}/routes/${route.id}/labels`, '_blank')}
+                          className="text-gray-500 hover:text-brand-400 transition-colors p-1.5 rounded-lg hover:bg-navy-800"
+                          title="Imprimir etiquetas"
+                        >
+                          <Printer size={16} />
+                        </button>
                         {hasUndelivered(route.orders) && route.status !== 'CANCELLED' && (
                           <button
                             onClick={() => cancelRoute(route.id)}

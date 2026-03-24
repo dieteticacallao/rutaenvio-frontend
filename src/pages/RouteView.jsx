@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { MapPin, Navigation, Phone, Package, CheckCircle2, Loader2, Camera, X, Truck, Clock, Play } from 'lucide-react'
+import { MapPin, Navigation, Phone, Package, CheckCircle2, Loader2, Camera, X, Truck, Clock, Play, ScanLine, PackageCheck } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
 const STATUS_CONFIG = {
   PENDING: { label: 'Pendiente', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
   ASSIGNED: { label: 'Asignado', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
-  PICKED_UP: { label: 'Retirado', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+  PICKED_UP: { label: 'Retirado', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
   IN_TRANSIT: { label: 'En camino', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   ARRIVED: { label: 'Llego', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   DELIVERED: { label: 'Entregado', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
@@ -42,6 +42,8 @@ export default function RouteView() {
   const [submitting, setSubmitting] = useState(false)
   const [updatingOrder, setUpdatingOrder] = useState(null)
   const [startingRoute, setStartingRoute] = useState(false)
+  const [pickingUp, setPickingUp] = useState(null)
+  const [scanModal, setScanModal] = useState(false)
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef({})
@@ -171,6 +173,65 @@ export default function RouteView() {
     } finally {
       setStartingRoute(false)
     }
+  }
+
+  const confirmPickup = async (orderId) => {
+    setPickingUp(orderId)
+    try {
+      const r = await fetch(`${API}/driver-web/${token}/order/${orderId}/pickup`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const data = await r.json()
+      if (data.success) {
+        setRoute(prev => ({
+          ...prev,
+          orders: prev.orders.map(o => o.id === orderId ? { ...o, status: 'PICKED_UP', pickedUpAt: new Date().toISOString() } : o)
+        }))
+      }
+    } catch (err) {
+      console.error('Error confirmando retiro:', err)
+    } finally {
+      setPickingUp(null)
+    }
+  }
+
+  const handleScanCapture = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Try BarcodeDetector API first
+    if ('BarcodeDetector' in window) {
+      try {
+        const bitmap = await createImageBitmap(file)
+        const detector = new BarcodeDetector({ formats: ['qr_code'] })
+        const barcodes = await detector.detect(bitmap)
+        if (barcodes.length > 0) {
+          const raw = barcodes[0].rawValue
+          try {
+            const parsed = JSON.parse(raw)
+            if (parsed.orderId) {
+              setScanModal(false)
+              confirmPickup(parsed.orderId)
+              return
+            }
+          } catch {
+            // Not JSON, try as orderId directly
+            const order = route.orders.find(o => o.id === raw)
+            if (order) {
+              setScanModal(false)
+              confirmPickup(raw)
+              return
+            }
+          }
+        }
+      } catch {
+        // BarcodeDetector failed, fall through
+      }
+    }
+
+    // Fallback: try reading as image with canvas
+    setScanModal(false)
   }
 
   const markInTransit = async (orderId) => {
@@ -375,11 +436,22 @@ export default function RouteView() {
         {/* Orders list */}
         <div className="px-3 pt-3 space-y-2">
           {route.orders.map((order, idx) => {
-            const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING
-            const isPending = ['PENDING', 'ASSIGNED', 'PICKED_UP'].includes(order.status)
+            const isPickedUp = order.status === 'PICKED_UP'
+            const needsPickup = ['PENDING', 'ASSIGNED'].includes(order.status)
+            const canGoTransit = isPickedUp
             const isTransit = order.status === 'IN_TRANSIT' || order.status === 'ARRIVED'
             const isDelivered = order.status === 'DELIVERED'
             const isUpdating = updatingOrder === order.id
+            const isPickingUpThis = pickingUp === order.id
+            const showActions = !isDelivered && order.status !== 'CANCELLED' && order.status !== 'FAILED'
+
+            // Determine badge
+            let badgeCfg
+            if (needsPickup && routeStarted) {
+              badgeCfg = { label: 'Pendiente de retiro', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' }
+            } else {
+              badgeCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING
+            }
 
             return (
               <div key={order.id} className={`rounded-xl border p-3 ${isDelivered ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-navy-900 border-navy-800'}`}>
@@ -389,8 +461,8 @@ export default function RouteView() {
                     <span className="text-xs font-bold text-gray-500">#{order.routePosition}</span>
                     <span className="text-[10px] font-mono text-gray-600">{order.orderNumber}</span>
                   </div>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${cfg.color}`}>
-                    {cfg.label}
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeCfg.color}`}>
+                    {badgeCfg.label}
                   </span>
                 </div>
 
@@ -439,7 +511,7 @@ export default function RouteView() {
                 )}
 
                 {/* Action buttons */}
-                {(isPending || isTransit) && (
+                {showActions && (
                   <div className="flex gap-2 mt-2.5">
                     <button
                       onClick={() => navigateTo(order)}
@@ -448,7 +520,59 @@ export default function RouteView() {
                       <Navigation size={13} /> Navegar
                     </button>
 
-                    {isPending && routeStarted && (
+                    {/* Pickup buttons: scan QR or manual confirm */}
+                    {needsPickup && routeStarted && (
+                      <>
+                        <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors text-xs font-medium cursor-pointer disabled:opacity-50">
+                          {isPickingUpThis ? <Loader2 size={13} className="animate-spin" /> : <ScanLine size={13} />}
+                          Escanear retiro
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              e.target.value = ''
+                              // Try BarcodeDetector
+                              if ('BarcodeDetector' in window) {
+                                createImageBitmap(file).then(bitmap => {
+                                  const detector = new BarcodeDetector({ formats: ['qr_code'] })
+                                  return detector.detect(bitmap)
+                                }).then(barcodes => {
+                                  if (barcodes.length > 0) {
+                                    const raw = barcodes[0].rawValue
+                                    try {
+                                      const parsed = JSON.parse(raw)
+                                      if (parsed.orderId) { confirmPickup(parsed.orderId); return }
+                                    } catch {}
+                                    const found = route.orders.find(o => o.id === raw)
+                                    if (found) { confirmPickup(raw); return }
+                                  }
+                                  // Fallback: confirm this order manually
+                                  confirmPickup(order.id)
+                                }).catch(() => confirmPickup(order.id))
+                              } else {
+                                // No BarcodeDetector, confirm manually
+                                confirmPickup(order.id)
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                        <button
+                          onClick={() => confirmPickup(order.id)}
+                          disabled={isPickingUpThis}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-navy-800 text-amber-400 hover:bg-navy-700 transition-colors text-xs font-medium border border-amber-500/30 disabled:opacity-50"
+                        >
+                          {isPickingUpThis ? <Loader2 size={13} className="animate-spin" /> : <PackageCheck size={13} />}
+                          Retiro manual
+                        </button>
+                      </>
+                    )}
+
+                    {/* En camino: only after pickup */}
+                    {canGoTransit && routeStarted && (
                       <button
                         onClick={() => markInTransit(order.id)}
                         disabled={isUpdating}
