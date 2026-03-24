@@ -30,8 +30,12 @@ export default function Orders() {
     const params = { page: filter.page, limit: 30 }
     if (filter.status) params.status = filter.status
     api.get('/orders', { params }).then(r => {
-      setOrders(r.data.orders); setTotal(r.data.total); setLoading(false)
-    }).catch(() => setLoading(false))
+      const d = r.data
+      const list = Array.isArray(d) ? d : Array.isArray(d?.orders) ? d.orders : []
+      setOrders(list)
+      setTotal(d?.total ?? list.length)
+      setLoading(false)
+    }).catch(() => { setOrders([]); setLoading(false) })
   }, [filter])
 
   useEffect(() => { loadOrders() }, [loadOrders])
@@ -65,7 +69,8 @@ export default function Orders() {
   }
 
   // Client-side filtering
-  const filteredOrders = orders.filter(order => {
+  const safeOrders = Array.isArray(orders) ? orders : []
+  const filteredOrders = safeOrders.filter(order => {
     // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -499,10 +504,13 @@ function TNImportModal({ onClose, onImported }) {
     if (to) params.date_to = to
     api.get('/tiendanube/orders', { params })
       .then(r => {
-        setTnOrders(r.data.orders || r.data || [])
+        const d = r.data
+        const list = Array.isArray(d) ? d : Array.isArray(d?.orders) ? d.orders : []
+        setTnOrders(list)
         setLoading(false)
       })
       .catch(err => {
+        setTnOrders([])
         setError(err.response?.data?.error || 'Error al obtener pedidos de Tiendanube')
         setLoading(false)
       })
