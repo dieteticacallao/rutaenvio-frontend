@@ -157,7 +157,58 @@ export default function RouteDistribution() {
       if (originLoc?.lat && originLoc?.lng) bounds.push([originLoc.lat, originLoc.lng])
       if (bounds.length > 0) mapInstance.current.fitBounds(bounds, { padding: [40, 40] })
     }
-  }, [step, selectedOrders, distribution, orders, selectedLocationId, locations])
+
+    if (step === 3 && confirmedRoutes) {
+      const bounds = []
+
+      confirmedRoutes.forEach((route, ri) => {
+        const color = ROUTE_COLORS[ri % ROUTE_COLORS.length]
+        const routeOrders = route.orders || []
+
+        routeOrders.forEach((order) => {
+          if (!order.lat || !order.lng) return
+          const marker = L.marker([order.lat, order.lng], {
+            icon: L.divIcon({
+              className: '',
+              html: `<div style="width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 0 8px ${color}60">${order.routePosition || ''}</div>`
+            })
+          }).bindPopup(`<b>${route.driverName || route.name}</b> - Parada ${order.routePosition}<br>${order.customerName}<br>${order.address}`)
+          marker.addTo(mapInstance.current)
+          markersRef.current.push(marker)
+          bounds.push([order.lat, order.lng])
+        })
+
+        // Build OSRM route
+        const waypoints = []
+        if (originLoc?.lat && originLoc?.lng) waypoints.push([originLoc.lng, originLoc.lat])
+        routeOrders.forEach(o => { if (o.lat && o.lng) waypoints.push([o.lng, o.lat]) })
+
+        if (waypoints.length >= 2) {
+          const coords = waypoints.map(w => w.join(',')).join(';')
+          fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`)
+            .then(r => r.json())
+            .then(data => {
+              if (data.routes?.[0]?.geometry?.coordinates) {
+                const latlngs = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]])
+                const polyline = L.polyline(latlngs, { color, weight: 4, opacity: 0.8 })
+                polyline.addTo(mapInstance.current)
+                markersRef.current.push(polyline)
+              }
+            })
+            .catch(() => {
+              // Fallback: straight lines
+              const fallbackCoords = waypoints.map(w => [w[1], w[0]])
+              const polyline = L.polyline(fallbackCoords, { color, weight: 3, opacity: 0.7, dashArray: '8 6' })
+              polyline.addTo(mapInstance.current)
+              markersRef.current.push(polyline)
+            })
+        }
+      })
+
+      if (originLoc?.lat && originLoc?.lng) bounds.push([originLoc.lat, originLoc.lng])
+      if (bounds.length > 0) mapInstance.current.fitBounds(bounds, { padding: [40, 40] })
+    }
+  }, [step, selectedOrders, distribution, confirmedRoutes, orders, selectedLocationId, locations])
 
   const removeFromRoute = (routeIndex, orderId) => {
     setDistribution(prev => {

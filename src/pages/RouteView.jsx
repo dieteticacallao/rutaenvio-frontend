@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { MapPin, Navigation, Phone, Package, CheckCircle2, Loader2, Camera, X, Truck, Clock, Play, ScanLine, PackageCheck } from 'lucide-react'
+import { Html5Qrcode } from 'html5-qrcode'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -17,10 +18,7 @@ const STATUS_CONFIG = {
 
 function getDriverLocation() {
   return new Promise((resolve) => {
-    if (!navigator.geolocation) {
-      resolve(null)
-      return
-    }
+    if (!navigator.geolocation) { resolve(null); return }
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => resolve(null),
@@ -43,21 +41,19 @@ export default function RouteView() {
   const [updatingOrder, setUpdatingOrder] = useState(null)
   const [startingRoute, setStartingRoute] = useState(false)
   const [pickingUp, setPickingUp] = useState(null)
-  const [scanModal, setScanModal] = useState(false)
+  const [scanModalOrder, setScanModalOrder] = useState(null)
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef({})
+  const scannerRef = useRef(null)
 
   const fetchRoute = useCallback(async () => {
     try {
       const r = await fetch(`${API}/driver-web/${token}`)
       if (!r.ok) throw new Error('not found')
       const data = await r.json()
-      if (data.success) {
-        setRoute(data.data)
-      } else {
-        throw new Error('error')
-      }
+      if (data.success) setRoute(data.data)
+      else throw new Error('error')
     } catch {
       setError('Ruta no encontrada')
     } finally {
@@ -76,42 +72,33 @@ export default function RouteView() {
     if (!L) return
 
     mapInstance.current = L.map(mapRef.current, {
-      center: [-34.6037, -58.3816],
-      zoom: 12,
-      zoomControl: true,
-      attributionControl: false
+      center: [-34.6037, -58.3816], zoom: 12,
+      zoomControl: true, attributionControl: false
     })
-
     L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(mapInstance.current)
 
     const bounds = []
-
-    // Origin marker
     if (route.origin) {
       L.marker([route.origin.lat, route.origin.lng], {
         icon: L.divIcon({
           className: '',
           html: '<div style="width:32px;height:32px;background:#ef4444;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(239,68,68,0.5)">O</div>',
-          iconSize: [32, 32],
-          iconAnchor: [16, 16]
+          iconSize: [32, 32], iconAnchor: [16, 16]
         })
       }).addTo(mapInstance.current)
       bounds.push([route.origin.lat, route.origin.lng])
     }
 
-    // Order markers
     route.orders.forEach(order => {
       if (!order.lat && !order.lng) return
       addOrderMarker(L, order, bounds)
     })
 
-    // Route line
     const lineCoords = route.orders.filter(o => o.lat && o.lng).map(o => [o.lat, o.lng])
     if (route.origin) lineCoords.unshift([route.origin.lat, route.origin.lng])
     if (lineCoords.length > 1) {
       L.polyline(lineCoords, { color: '#3b82f6', weight: 3, opacity: 0.8, dashArray: '8 6' }).addTo(mapInstance.current)
     }
-
     if (bounds.length > 0) mapInstance.current.fitBounds(bounds, { padding: [30, 30] })
 
     return () => {
@@ -127,8 +114,7 @@ export default function RouteView() {
       icon: L.divIcon({
         className: '',
         html: `<div style="width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 2px 6px ${color}60">${order.status === 'DELIVERED' ? '\u2713' : order.routePosition}</div>`,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14]
+        iconSize: [28, 28], iconAnchor: [14, 14]
       })
     }).addTo(mapInstance.current)
     markersRef.current[order.id] = marker
@@ -147,40 +133,19 @@ export default function RouteView() {
       icon: L.divIcon({
         className: '',
         html: `<div style="width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 2px 6px ${color}60">${status === 'DELIVERED' ? '\u2713' : order.routePosition}</div>`,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14]
+        iconSize: [28, 28], iconAnchor: [14, 14]
       })
     }).addTo(mapInstance.current)
     markersRef.current[orderId] = marker
   }
 
-  const startRoute = async () => {
-    setStartingRoute(true)
-    try {
-      const loc = await getDriverLocation()
-      const body = loc ? { lat: loc.lat, lng: loc.lng } : {}
-      const r = await fetch(`${API}/driver-web/${token}/start`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      const data = await r.json()
-      if (data.success) {
-        setRoute(prev => ({ ...prev, startedAt: data.startedAt || new Date().toISOString() }))
-      }
-    } catch (err) {
-      console.error('Error iniciando ruta:', err)
-    } finally {
-      setStartingRoute(false)
-    }
-  }
+  // --- Actions ---
 
   const confirmPickup = async (orderId) => {
     setPickingUp(orderId)
     try {
       const r = await fetch(`${API}/driver-web/${token}/order/${orderId}/pickup`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' }
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }
       })
       const data = await r.json()
       if (data.success) {
@@ -196,42 +161,95 @@ export default function RouteView() {
     }
   }
 
-  const handleScanCapture = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const openScanner = (order) => {
+    setScanModalOrder(order)
+  }
 
-    // Try BarcodeDetector API first
-    if ('BarcodeDetector' in window) {
-      try {
-        const bitmap = await createImageBitmap(file)
-        const detector = new BarcodeDetector({ formats: ['qr_code'] })
-        const barcodes = await detector.detect(bitmap)
-        if (barcodes.length > 0) {
-          const raw = barcodes[0].rawValue
+  const stopScanner = () => {
+    if (scannerRef.current) {
+      scannerRef.current.stop().catch(() => {})
+      scannerRef.current.clear()
+      scannerRef.current = null
+    }
+    setScanModalOrder(null)
+  }
+
+  // Start html5-qrcode when scan modal opens
+  useEffect(() => {
+    if (!scanModalOrder) return
+    const elementId = 'qr-reader'
+    // Wait for DOM element
+    const timer = setTimeout(() => {
+      const scanner = new Html5Qrcode(elementId)
+      scannerRef.current = scanner
+      scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          // QR detected
+          let orderId = null
           try {
-            const parsed = JSON.parse(raw)
-            if (parsed.orderId) {
-              setScanModal(false)
-              confirmPickup(parsed.orderId)
-              return
-            }
+            const parsed = JSON.parse(decodedText)
+            orderId = parsed.orderId || parsed.id
           } catch {
-            // Not JSON, try as orderId directly
-            const order = route.orders.find(o => o.id === raw)
-            if (order) {
-              setScanModal(false)
-              confirmPickup(raw)
-              return
-            }
+            // Maybe raw orderId string
+            const found = route?.orders?.find(o => String(o.id) === decodedText)
+            if (found) orderId = found.id
           }
-        }
-      } catch {
-        // BarcodeDetector failed, fall through
+          scanner.stop().catch(() => {})
+          scanner.clear()
+          scannerRef.current = null
+          setScanModalOrder(null)
+          if (orderId) {
+            confirmPickup(orderId)
+          } else {
+            // Could not parse, confirm the current order
+            confirmPickup(scanModalOrder.id)
+          }
+        },
+        () => {} // ignore scan errors (no QR found yet)
+      ).catch(() => {
+        // Camera not available, fallback: confirm manually
+        scanner.clear()
+        scannerRef.current = null
+        setScanModalOrder(null)
+        confirmPickup(scanModalOrder.id)
+      })
+    }, 100)
+    return () => {
+      clearTimeout(timer)
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => {})
+        scannerRef.current.clear()
+        scannerRef.current = null
       }
     }
+  }, [scanModalOrder?.id])
 
-    // Fallback: try reading as image with canvas
-    setScanModal(false)
+  const startRoute = async () => {
+    setStartingRoute(true)
+    try {
+      const loc = await getDriverLocation()
+      const body = loc ? { lat: loc.lat, lng: loc.lng } : {}
+      const r = await fetch(`${API}/driver-web/${token}/start`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      const data = await r.json()
+      if (data.success) {
+        setRoute(prev => ({
+          ...prev,
+          startedAt: data.startedAt || new Date().toISOString(),
+          orders: prev.orders.map(o =>
+            o.status === 'PICKED_UP' ? { ...o, status: 'IN_TRANSIT' } : o
+          )
+        }))
+      }
+    } catch (err) {
+      console.error('Error iniciando ruta:', err)
+    } finally {
+      setStartingRoute(false)
+    }
   }
 
   const markInTransit = async (orderId) => {
@@ -240,8 +258,7 @@ export default function RouteView() {
       const loc = await getDriverLocation()
       const body = loc ? { lat: loc.lat, lng: loc.lng } : {}
       const r = await fetch(`${API}/driver-web/${token}/order/${orderId}/transit`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       })
       const data = await r.json()
@@ -282,18 +299,10 @@ export default function RouteView() {
     setSubmitting(true)
     try {
       const loc = await getDriverLocation()
-      const body = {
-        receiverName: receiverName.trim(),
-        receiverDni: receiverDni.trim(),
-        deliveryPhoto: photoPreview || null
-      }
-      if (loc) {
-        body.lat = loc.lat
-        body.lng = loc.lng
-      }
+      const body = { receiverName: receiverName.trim(), receiverDni: receiverDni.trim(), deliveryPhoto: photoPreview || null }
+      if (loc) { body.lat = loc.lat; body.lng = loc.lng }
       const r = await fetch(`${API}/driver-web/${token}/order/${deliverModal.id}/deliver`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       })
       const data = await r.json()
@@ -318,11 +327,11 @@ export default function RouteView() {
     const province = order.province || 'Buenos Aires'
     const parts = [order.address]
     if (order.city) parts.push(order.city)
-    parts.push(province)
-    parts.push('Argentina')
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(parts.join(', '))}`
-    window.open(url, '_blank')
+    parts.push(province, 'Argentina')
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(parts.join(', '))}`, '_blank')
   }
+
+  // --- Render ---
 
   if (loading) {
     return (
@@ -350,11 +359,14 @@ export default function RouteView() {
   const deliveredCount = route.orders.filter(o => o.status === 'DELIVERED').length
   const totalOrders = route.orders.length
   const routeDate = route.date ? new Date(route.date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
-
-  // Route started check
   const routeStarted = !!route.startedAt
 
-  // Stats calculations
+  // Pickup phase: all orders that still need pickup
+  const pendingPickup = route.orders.filter(o => ['PENDING', 'ASSIGNED'].includes(o.status))
+  const pickedUpCount = route.orders.filter(o => !['PENDING', 'ASSIGNED'].includes(o.status)).length
+  const allPickedUp = pendingPickup.length === 0
+
+  // Stats
   const deliveredOrders = route.orders.filter(o => o.status === 'DELIVERED' && o.deliveredAt)
   const routeStartTime = route.startedAt ? new Date(route.startedAt) : null
   const now = new Date()
@@ -399,23 +411,46 @@ export default function RouteView() {
           <div ref={mapRef} className="w-full h-full" />
         </div>
 
-        {/* Start Route / Stats */}
-        {!routeStarted ? (
-          <div className="px-3 pt-4 pb-2">
-            <button
-              onClick={startRoute}
-              disabled={startingRoute}
-              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl bg-brand-500 text-white font-bold text-base hover:bg-brand-600 transition-colors disabled:opacity-50"
-            >
-              {startingRoute ? (
-                <><Loader2 size={22} className="animate-spin" /> Iniciando ruta...</>
-              ) : (
-                <><Play size={22} /> Iniciar ruta</>
+        {/* PHASE 1: Pickup phase (before route started) */}
+        {!routeStarted && (
+          <div className="px-3 pt-3 space-y-3">
+            {/* Progress bar */}
+            <div className="bg-navy-900 border border-navy-800 rounded-xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-white">Retiro de paquetes</span>
+                <span className="text-xs text-gray-400">{pickedUpCount}/{totalOrders} retirados</span>
+              </div>
+              <div className="w-full h-2 bg-navy-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${allPickedUp ? 'bg-emerald-400' : 'bg-amber-400'}`}
+                  style={{ width: `${totalOrders > 0 ? (pickedUpCount / totalOrders) * 100 : 0}%` }}
+                />
+              </div>
+              {!allPickedUp && (
+                <p className="text-[11px] text-gray-500 mt-2">Confirma el retiro de cada paquete antes de iniciar la ruta</p>
               )}
-            </button>
+            </div>
+
+            {/* Iniciar ruta button - only when all picked up */}
+            {allPickedUp && (
+              <button
+                onClick={startRoute}
+                disabled={startingRoute}
+                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl bg-brand-500 text-white font-bold text-base hover:bg-brand-600 transition-colors disabled:opacity-50"
+              >
+                {startingRoute ? (
+                  <><Loader2 size={22} className="animate-spin" /> Iniciando ruta...</>
+                ) : (
+                  <><Play size={22} /> Iniciar ruta</>
+                )}
+              </button>
+            )}
           </div>
-        ) : (
-          <div className="flex items-center justify-center gap-4 px-3 py-2.5 bg-navy-900 border-b border-navy-800 text-xs text-gray-400">
+        )}
+
+        {/* PHASE 2: Route started - show stats */}
+        {routeStarted && (
+          <div className="flex items-center justify-center gap-4 px-3 py-2.5 bg-navy-900 border-b border-navy-800 text-xs text-gray-400 flex-wrap">
             <div className="flex items-center gap-1">
               <Clock size={12} className="text-emerald-400" />
               <span>Ruta iniciada a las {new Date(route.startedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} hs</span>
@@ -423,7 +458,7 @@ export default function RouteView() {
             {deliveredCount > 0 && (
               <>
                 <span className="text-navy-700">|</span>
-                <div>Tiempo en ruta: {routeHours}h {routeMins}m</div>
+                <div>Tiempo: {routeHours}h {routeMins}m</div>
                 <span className="text-navy-700">|</span>
                 <div>Promedio: {avgMinutes} min</div>
                 <span className="text-navy-700">|</span>
@@ -435,19 +470,17 @@ export default function RouteView() {
 
         {/* Orders list */}
         <div className="px-3 pt-3 space-y-2">
-          {route.orders.map((order, idx) => {
-            const isPickedUp = order.status === 'PICKED_UP'
+          {route.orders.map((order) => {
             const needsPickup = ['PENDING', 'ASSIGNED'].includes(order.status)
-            const canGoTransit = isPickedUp
+            const isPickedUp = order.status === 'PICKED_UP'
             const isTransit = order.status === 'IN_TRANSIT' || order.status === 'ARRIVED'
             const isDelivered = order.status === 'DELIVERED'
             const isUpdating = updatingOrder === order.id
             const isPickingUpThis = pickingUp === order.id
-            const showActions = !isDelivered && order.status !== 'CANCELLED' && order.status !== 'FAILED'
 
-            // Determine badge
+            // Badge
             let badgeCfg
-            if (needsPickup && routeStarted) {
+            if (needsPickup) {
               badgeCfg = { label: 'Pendiente de retiro', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' }
             } else {
               badgeCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING
@@ -455,7 +488,7 @@ export default function RouteView() {
 
             return (
               <div key={order.id} className={`rounded-xl border p-3 ${isDelivered ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-navy-900 border-navy-800'}`}>
-                {/* Top row: position + order number + status badge */}
+                {/* Top row */}
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-gray-500">#{order.routePosition}</span>
@@ -466,10 +499,8 @@ export default function RouteView() {
                   </span>
                 </div>
 
-                {/* Customer name */}
                 <div className="text-sm font-semibold text-white mb-1">{order.customerName}</div>
 
-                {/* Address */}
                 <div className="text-xs text-gray-400 flex items-start gap-1 mb-0.5">
                   <MapPin size={12} className="mt-0.5 flex-shrink-0" />
                   <span>
@@ -479,22 +510,19 @@ export default function RouteView() {
                   </span>
                 </div>
 
-                {/* Phone */}
                 {order.customerPhone && (
                   <a href={`tel:${order.customerPhone}`} className="text-xs text-brand-400 flex items-center gap-1 mt-1 no-underline">
-                    <Phone size={11} />
-                    {order.customerPhone}
+                    <Phone size={11} /> {order.customerPhone}
                   </a>
                 )}
 
-                {/* Notes */}
                 {order.notes && (
                   <div className="text-xs text-amber-400/70 mt-1.5 bg-amber-500/5 rounded-lg px-2 py-1">
                     Nota: {order.notes}
                   </div>
                 )}
 
-                {/* Delivered info with time */}
+                {/* Delivered info */}
                 {isDelivered && (
                   <div className="mt-2 text-xs text-emerald-400/70 flex items-center gap-1">
                     <CheckCircle2 size={12} />
@@ -510,8 +538,37 @@ export default function RouteView() {
                   </div>
                 )}
 
-                {/* Action buttons */}
-                {showActions && (
+                {/* PICKUP PHASE: scan or manual confirm (before route started) */}
+                {needsPickup && !routeStarted && (
+                  <div className="flex gap-2 mt-2.5">
+                    <button
+                      onClick={() => openScanner(order)}
+                      disabled={isPickingUpThis}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors text-xs font-medium disabled:opacity-50"
+                    >
+                      {isPickingUpThis ? <Loader2 size={13} className="animate-spin" /> : <ScanLine size={13} />}
+                      Escanear retiro
+                    </button>
+                    <button
+                      onClick={() => confirmPickup(order.id)}
+                      disabled={isPickingUpThis}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-navy-800 text-amber-400 hover:bg-navy-700 transition-colors text-xs font-medium border border-amber-500/30 disabled:opacity-50"
+                    >
+                      {isPickingUpThis ? <Loader2 size={13} className="animate-spin" /> : <PackageCheck size={13} />}
+                      Retiro manual
+                    </button>
+                  </div>
+                )}
+
+                {/* Picked up but route not started yet */}
+                {isPickedUp && !routeStarted && (
+                  <div className="mt-2 text-xs text-emerald-400/70 flex items-center gap-1">
+                    <PackageCheck size={12} /> Paquete retirado
+                  </div>
+                )}
+
+                {/* ROUTE PHASE: navigate + deliver (after route started) */}
+                {routeStarted && (isPickedUp || isTransit) && (
                   <div className="flex gap-2 mt-2.5">
                     <button
                       onClick={() => navigateTo(order)}
@@ -519,60 +576,7 @@ export default function RouteView() {
                     >
                       <Navigation size={13} /> Navegar
                     </button>
-
-                    {/* Pickup buttons: scan QR or manual confirm */}
-                    {needsPickup && routeStarted && (
-                      <>
-                        <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors text-xs font-medium cursor-pointer disabled:opacity-50">
-                          {isPickingUpThis ? <Loader2 size={13} className="animate-spin" /> : <ScanLine size={13} />}
-                          Escanear retiro
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (!file) return
-                              e.target.value = ''
-                              // Try BarcodeDetector
-                              if ('BarcodeDetector' in window) {
-                                createImageBitmap(file).then(bitmap => {
-                                  const detector = new BarcodeDetector({ formats: ['qr_code'] })
-                                  return detector.detect(bitmap)
-                                }).then(barcodes => {
-                                  if (barcodes.length > 0) {
-                                    const raw = barcodes[0].rawValue
-                                    try {
-                                      const parsed = JSON.parse(raw)
-                                      if (parsed.orderId) { confirmPickup(parsed.orderId); return }
-                                    } catch {}
-                                    const found = route.orders.find(o => o.id === raw)
-                                    if (found) { confirmPickup(raw); return }
-                                  }
-                                  // Fallback: confirm this order manually
-                                  confirmPickup(order.id)
-                                }).catch(() => confirmPickup(order.id))
-                              } else {
-                                // No BarcodeDetector, confirm manually
-                                confirmPickup(order.id)
-                              }
-                            }}
-                            className="hidden"
-                          />
-                        </label>
-                        <button
-                          onClick={() => confirmPickup(order.id)}
-                          disabled={isPickingUpThis}
-                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-navy-800 text-amber-400 hover:bg-navy-700 transition-colors text-xs font-medium border border-amber-500/30 disabled:opacity-50"
-                        >
-                          {isPickingUpThis ? <Loader2 size={13} className="animate-spin" /> : <PackageCheck size={13} />}
-                          Retiro manual
-                        </button>
-                      </>
-                    )}
-
-                    {/* En camino: only after pickup */}
-                    {canGoTransit && routeStarted && (
+                    {isPickedUp && (
                       <button
                         onClick={() => markInTransit(order.id)}
                         disabled={isUpdating}
@@ -582,7 +586,6 @@ export default function RouteView() {
                         En camino
                       </button>
                     )}
-
                     {isTransit && (
                       <button
                         onClick={() => openDeliverModal(order)}
@@ -604,86 +607,59 @@ export default function RouteView() {
         </div>
       </div>
 
+      {/* QR Scanner Modal */}
+      {scanModalOrder && (
+        <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={stopScanner}>
+          <div className="bg-navy-900 w-full max-w-sm rounded-2xl border border-navy-800 p-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-white">Escanear QR - Pedido #{scanModalOrder.routePosition}</h3>
+              <button onClick={stopScanner} className="text-gray-500 hover:text-white"><X size={18} /></button>
+            </div>
+            <div id="qr-reader" className="w-full rounded-lg overflow-hidden" style={{ minHeight: '280px' }} />
+            <p className="text-[11px] text-gray-500 mt-2 text-center">Apunta la camara al codigo QR del paquete</p>
+            <button
+              onClick={() => { stopScanner(); confirmPickup(scanModalOrder.id) }}
+              className="w-full mt-3 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-navy-800 text-amber-400 hover:bg-navy-700 transition-colors text-xs font-medium border border-amber-500/30"
+            >
+              <PackageCheck size={13} /> No puedo escanear, confirmar retiro manual
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Delivery Modal */}
       {deliverModal && (
         <div className="fixed inset-0 bg-black/70 z-[9999] flex items-end sm:items-center justify-center" onClick={() => !submitting && setDeliverModal(null)}>
-          <div
-            className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 p-5"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Modal header */}
+          <div className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 p-5" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-white">Confirmar entrega</h2>
-              <button onClick={() => !submitting && setDeliverModal(null)} className="text-gray-500 hover:text-white">
-                <X size={20} />
-              </button>
+              <button onClick={() => !submitting && setDeliverModal(null)} className="text-gray-500 hover:text-white"><X size={20} /></button>
             </div>
+            <p className="text-xs text-gray-400 mb-4">Pedido #{deliverModal.routePosition} - {deliverModal.customerName}</p>
 
-            <p className="text-xs text-gray-400 mb-4">
-              Pedido #{deliverModal.routePosition} - {deliverModal.customerName}
-            </p>
-
-            {/* Receiver name */}
             <label className="block text-xs text-gray-400 mb-1">Nombre de quien recibe *</label>
-            <input
-              type="text"
-              value={receiverName}
-              onChange={e => setReceiverName(e.target.value)}
-              placeholder="Ej: Juan Perez"
-              required
-              className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 mb-4"
-            />
+            <input type="text" value={receiverName} onChange={e => setReceiverName(e.target.value)} placeholder="Ej: Juan Perez" className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 mb-4" />
 
-            {/* DNI */}
             <label className="block text-xs text-gray-400 mb-1">DNI *</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={receiverDni}
-              onChange={e => setReceiverDni(e.target.value.replace(/\D/g, ''))}
-              placeholder="Ej: 12345678"
-              required
-              className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 mb-4"
-            />
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={receiverDni} onChange={e => setReceiverDni(e.target.value.replace(/\D/g, ''))} placeholder="Ej: 12345678" className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 mb-4" />
 
-            {/* Photo capture */}
-            <label className="block text-xs text-gray-400 mb-1">Foto entrega - foto al domicilio (opcional)</label>
+            <label className="block text-xs text-gray-400 mb-1">Foto entrega (opcional)</label>
             {!photoPreview ? (
               <label className="flex items-center justify-center gap-2 w-full py-8 border-2 border-dashed border-navy-800 rounded-xl text-gray-500 hover:border-brand-500 hover:text-brand-400 transition-colors cursor-pointer mb-4">
-                <Camera size={20} />
-                <span className="text-sm">Sacar foto</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handlePhoto}
-                  className="hidden"
-                />
+                <Camera size={20} /> <span className="text-sm">Sacar foto</span>
+                <input type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
               </label>
             ) : (
               <div className="relative mb-4">
                 <img src={photoPreview} alt="Preview" className="w-full h-48 object-cover rounded-xl border border-navy-800" />
-                <button
-                  onClick={() => { setPhoto(null); setPhotoPreview(null) }}
-                  className="absolute top-2 right-2 bg-black/60 rounded-full p-1"
-                >
+                <button onClick={() => { setPhoto(null); setPhotoPreview(null) }} className="absolute top-2 right-2 bg-black/60 rounded-full p-1">
                   <X size={16} className="text-white" />
                 </button>
               </div>
             )}
 
-            {/* Confirm button */}
-            <button
-              onClick={confirmDelivery}
-              disabled={submitting || !receiverName.trim() || !receiverDni.trim()}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50"
-            >
-              {submitting ? (
-                <><Loader2 size={16} className="animate-spin" /> Confirmando...</>
-              ) : (
-                <><CheckCircle2 size={16} /> Confirmar entrega</>
-              )}
+            <button onClick={confirmDelivery} disabled={submitting || !receiverName.trim() || !receiverDni.trim()} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50">
+              {submitting ? (<><Loader2 size={16} className="animate-spin" /> Confirmando...</>) : (<><CheckCircle2 size={16} /> Confirmar entrega</>)}
             </button>
           </div>
         </div>
@@ -691,8 +667,12 @@ export default function RouteView() {
 
       <style>{`
         .leaflet-container { background: #111829 !important; }
-        .leaflet-tile-pane { }
         .leaflet-control-attribution { display: none !important; }
+        #qr-reader video { border-radius: 8px; }
+        #qr-reader { border: none !important; }
+        #qr-reader__scan_region { background: transparent !important; }
+        #qr-reader__dashboard { background: transparent !important; }
+        #qr-reader__dashboard button { background: #1e293b !important; color: #e2e8f0 !important; border: 1px solid #334155 !important; border-radius: 8px !important; padding: 8px 16px !important; }
       `}</style>
     </div>
   )
