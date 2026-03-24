@@ -42,6 +42,7 @@ export default function RouteView() {
   const [startingRoute, setStartingRoute] = useState(false)
   const [pickingUp, setPickingUp] = useState(null)
   const [scanModalOrder, setScanModalOrder] = useState(null)
+  const [routeEstimate, setRouteEstimate] = useState(null)
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef({})
@@ -105,6 +106,26 @@ export default function RouteView() {
       if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null }
       markersRef.current = {}
     }
+  }, [route?.id])
+
+  // Fetch OSRM route estimate
+  useEffect(() => {
+    if (!route || routeEstimate) return
+    const waypoints = []
+    if (route.origin?.lat && route.origin?.lng) waypoints.push([route.origin.lng, route.origin.lat])
+    route.orders.forEach(o => { if (o.lat && o.lng) waypoints.push([o.lng, o.lat]) })
+    if (waypoints.length < 2) return
+    const coords = waypoints.map(w => w.join(',')).join(';')
+    fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=false`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.routes?.[0]) {
+          const dur = Math.round(data.routes[0].duration / 60)
+          const dist = (data.routes[0].distance / 1000).toFixed(1)
+          setRouteEstimate({ minutes: dur, km: dist })
+        }
+      })
+      .catch(() => {})
   }, [route?.id])
 
   function addOrderMarker(L, order, bounds) {
@@ -422,24 +443,42 @@ export default function RouteView() {
                   style={{ width: `${totalOrders > 0 ? (pickedUpCount / totalOrders) * 100 : 0}%` }}
                 />
               </div>
-              {!allPickedUp && (
-                <p className="text-[11px] text-gray-500 mt-2">Confirma el retiro de cada paquete antes de iniciar la ruta</p>
-              )}
             </div>
 
-            {/* Iniciar ruta button - only when all picked up */}
-            {allPickedUp && (
-              <button
-                onClick={startRoute}
-                disabled={startingRoute}
-                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl bg-brand-500 text-white font-bold text-base hover:bg-brand-600 transition-colors disabled:opacity-50"
-              >
-                {startingRoute ? (
-                  <><Loader2 size={22} className="animate-spin" /> Iniciando ruta...</>
-                ) : (
-                  <><Play size={22} /> Iniciar ruta</>
+            {/* Route estimate from OSRM */}
+            {routeEstimate && (
+              <div className="bg-navy-900 border border-navy-800 rounded-xl p-3 flex items-center justify-center gap-3 text-xs text-gray-400">
+                <Clock size={14} className="text-brand-400" />
+                <span>Tiempo estimado: {Math.floor(routeEstimate.minutes / 60)}h {routeEstimate.minutes % 60}min</span>
+                <span className="text-navy-700">|</span>
+                <span>{routeEstimate.km} km</span>
+              </div>
+            )}
+
+            {/* Iniciar ruta button - always visible if at least 1 picked up */}
+            {pickedUpCount > 0 && (
+              <div className="space-y-2">
+                {!allPickedUp && (
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-400">
+                    Tenes {pendingPickup.length} pedido{pendingPickup.length !== 1 ? 's' : ''} sin confirmar retiro. Los pedidos no confirmados quedaran como pendientes.
+                  </div>
                 )}
-              </button>
+                <button
+                  onClick={startRoute}
+                  disabled={startingRoute}
+                  className={`w-full flex items-center justify-center gap-2.5 py-4 rounded-xl text-white font-bold text-base transition-colors disabled:opacity-50 ${
+                    allPickedUp ? 'bg-brand-500 hover:bg-brand-600' : 'bg-amber-600 hover:bg-amber-700'
+                  }`}
+                >
+                  {startingRoute ? (
+                    <><Loader2 size={22} className="animate-spin" /> Iniciando ruta...</>
+                  ) : allPickedUp ? (
+                    <><Play size={22} /> Iniciar ruta</>
+                  ) : (
+                    <><Play size={22} /> Iniciar ruta igual</>
+                  )}
+                </button>
+              </div>
             )}
           </div>
         )}

@@ -324,7 +324,7 @@ export default function RoutesHistory() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-white">Historial de rutas</h1>
+          <h1 className="text-xl font-bold text-white">Rutas</h1>
           <p className="text-sm text-gray-500">{routes.length} rutas encontradas</p>
         </div>
       </div>
@@ -427,13 +427,26 @@ export default function RoutesHistory() {
                           </button>
                         )}
                         {link && (
-                          <button
-                            onClick={() => { navigator.clipboard.writeText(link); toast.success('Link copiado') }}
-                            className="text-gray-500 hover:text-brand-400 transition-colors p-1.5 rounded-lg hover:bg-navy-800"
-                            title="Copiar link"
-                          >
-                            <Copy size={16} />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(link); toast.success('Link copiado') }}
+                              className="text-gray-500 hover:text-brand-400 transition-colors p-1.5 rounded-lg hover:bg-navy-800"
+                              title="Copiar link"
+                            >
+                              <Copy size={16} />
+                            </button>
+                            {route.driver?.phone && (
+                              <a
+                                href={`https://wa.me/${route.driver.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola! Aca tenes tu ruta: ${link}`)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-gray-500 hover:text-emerald-400 transition-colors p-1.5 rounded-lg hover:bg-navy-800"
+                                title="Enviar por WhatsApp"
+                              >
+                                <MessageCircle size={16} />
+                              </a>
+                            )}
+                          </>
                         )}
                         <button
                           onClick={() => window.open(`${api.defaults.baseURL}/routes/${route.id}/labels`, '_blank')}

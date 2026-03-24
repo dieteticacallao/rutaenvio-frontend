@@ -80,7 +80,7 @@ export default function Layout({ children }) {
               </NavLink>
               <NavLink to="/routes/history" className={({ isActive }) => subLinkClass(isActive)}>
                 <Clock size={14} />
-                Historial
+                Rutas
               </NavLink>
             </div>
           )}

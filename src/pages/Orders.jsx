@@ -28,7 +28,11 @@ export default function Orders() {
   const loadOrders = useCallback(() => {
     setLoading(true)
     const params = { page: filter.page, limit: 30 }
-    if (filter.status) params.status = filter.status
+    if (filter.status && filter.status !== 'EN_RUTA') {
+      params.status = filter.status
+    } else if (filter.status === 'EN_RUTA') {
+      params.status = 'ASSIGNED,PICKED_UP,IN_TRANSIT,ARRIVED'
+    }
     api.get('/orders', { params }).then(r => {
       const d = r.data
       const list = Array.isArray(d) ? d : Array.isArray(d?.orders) ? d.orders : []
@@ -113,12 +117,18 @@ export default function Orders() {
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap">
-        {['', 'PENDING', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'].map(s => (
-          <button key={s} onClick={() => setFilter(f => ({ ...f, status: s, page: 1 }))}
+        {[
+          { value: '', label: 'Todos' },
+          { value: 'PENDING', label: 'Pendientes' },
+          { value: 'EN_RUTA', label: 'En ruta' },
+          { value: 'DELIVERED', label: 'Entregados' },
+          { value: 'CANCELLED', label: 'Cancelados' },
+        ].map(s => (
+          <button key={s.value} onClick={() => setFilter(f => ({ ...f, status: s.value, page: 1 }))}
             className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
-              filter.status === s ? 'bg-brand-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white'
+              filter.status === s.value ? 'bg-brand-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white'
             }`}>
-            {s ? STATUS_MAP[s]?.label : 'Todos'}
+            {s.label}
           </button>
         ))}
       </div>
