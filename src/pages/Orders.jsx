@@ -561,9 +561,16 @@ function TNImportModal({ onClose, onImported }) {
     }
     setImporting(true)
     try {
-      const { data } = await api.post('/tiendanube/import', { orderIds: Array.from(selected) })
-      setResult(data)
+      const selectedIds = Array.from(selected)
+      const selectedOrders = tnOrders.filter(o => selected.has(o.id))
+      const { data } = await api.post('/tiendanube/import', {
+        orderIds: selectedIds,
+        orders: selectedOrders
+      })
+      const imported = data?.imported ?? selectedIds.length
+      toast.success(`Se importaron ${imported} pedidos`)
       onImported()
+      onClose()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al importar')
     }
