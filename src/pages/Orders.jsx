@@ -486,8 +486,7 @@ function ExcelImportModal({ onClose, onImported }) {
 
 function toLocalDate(date) {
   const d = date || new Date()
-  // sv-SE locale always outputs YYYY-MM-DD
-  return d.toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
 }
 
 function TNImportModal({ onClose, onImported }) {

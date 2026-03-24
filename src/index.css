@@ -7,6 +7,8 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { @apply bg-navy-800 rounded-full; }
+  input[type="date"] { appearance: auto; -webkit-appearance: auto; }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
 }
 
 @layer components {
