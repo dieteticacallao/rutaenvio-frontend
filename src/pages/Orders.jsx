@@ -9,7 +9,7 @@ export default function Orders() {
   const [orders, setOrders] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState({ status: '', page: 1 })
+  const [filter, setFilter] = useState({ status: '', source: '', page: 1 })
   const [showCreate, setShowCreate] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
   const [showExcelModal, setShowExcelModal] = useState(false)
@@ -32,6 +32,9 @@ export default function Orders() {
       params.status = filter.status
     } else if (filter.status === 'EN_RUTA') {
       params.status = 'ASSIGNED,PICKED_UP,IN_TRANSIT,ARRIVED'
+    }
+    if (filter.source) {
+      params.source = filter.source
     }
     api.get('/orders', { params }).then(r => {
       const d = r.data
@@ -133,6 +136,24 @@ export default function Orders() {
         ))}
       </div>
 
+      {/* Source filter */}
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { value: '', label: 'Todos' },
+          { value: 'TIENDANUBE', label: 'Tiendanube' },
+          { value: 'MERCADOLIBRE', label: 'MercadoLibre' },
+          { value: 'EXCEL', label: 'Excel' },
+          { value: 'MANUAL', label: 'Manual' },
+        ].map(s => (
+          <button key={s.value} onClick={() => setFilter(f => ({ ...f, source: s.value, page: 1 }))}
+            className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
+              filter.source === s.value ? 'bg-brand-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white'
+            }`}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
       {/* Search and date filters */}
       <div className="space-y-3">
         <div className="flex gap-3 flex-wrap items-end">
@@ -186,9 +207,9 @@ export default function Orders() {
               {btn.label}
             </button>
           ))}
-          {(searchQuery || dateFrom || dateTo || filter.status) && (
+          {(searchQuery || dateFrom || dateTo || filter.status || filter.source) && (
             <button
-              onClick={() => { setSearchQuery(''); setDateFrom(''); setDateTo(''); setFilter(f => ({ ...f, status: '', page: 1 })) }}
+              onClick={() => { setSearchQuery(''); setDateFrom(''); setDateTo(''); setFilter(f => ({ ...f, status: '', source: '', page: 1 })) }}
               className="text-xs px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-1"
             >
               <X size={12} /> Limpiar filtros
