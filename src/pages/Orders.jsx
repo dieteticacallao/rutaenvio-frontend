@@ -619,11 +619,13 @@ function TNImportModal({ onClose, onImported }) {
     })
   }
 
+  const importableOrders = tnOrders.filter(o => !o.alreadyImported)
+
   const toggleAll = () => {
-    if (selected.size === tnOrders.length) {
+    if (selected.size === importableOrders.length) {
       setSelected(new Set())
     } else {
-      setSelected(new Set(tnOrders.map(o => o.id)))
+      setSelected(new Set(importableOrders.map(o => o.id)))
     }
   }
 
@@ -743,7 +745,7 @@ function TNImportModal({ onClose, onImported }) {
         ) : (
           <>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-400">{tnOrders.length} pedidos con envio RutaEnvio encontrados</span>
+              <span className="text-gray-400">{importableOrders.length} pedidos nuevos con envio RutaEnvio{tnOrders.length > importableOrders.length ? ` (${tnOrders.length - importableOrders.length} ya importados)` : ''}</span>
               <span className="text-gray-500">{selected.size} seleccionados</span>
             </div>
 
@@ -754,7 +756,7 @@ function TNImportModal({ onClose, onImported }) {
                     <th className="p-2 pl-3 text-left w-8">
                       <input
                         type="checkbox"
-                        checked={selected.size === tnOrders.length && tnOrders.length > 0}
+                        checked={selected.size === importableOrders.length && importableOrders.length > 0}
                         onChange={toggleAll}
                         className="rounded border-navy-700 bg-navy-900 text-brand-500"
                       />
@@ -768,30 +770,37 @@ function TNImportModal({ onClose, onImported }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-navy-800/50">
-                  {tnOrders.map(order => (
-                    <tr
-                      key={order.id}
-                      onClick={() => toggleSelect(order.id)}
-                      className={`cursor-pointer transition-colors ${
-                        selected.has(order.id) ? 'bg-brand-500/5' : 'hover:bg-navy-800/30'
-                      }`}
-                    >
-                      <td className="p-2 pl-3" onClick={e => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selected.has(order.id)}
-                          onChange={() => toggleSelect(order.id)}
-                          className="rounded border-navy-700 bg-navy-900 text-brand-500"
-                        />
-                      </td>
-                      <td className="p-2 text-white font-mono text-xs">#{order.number || order.orderNumber || order.id}</td>
-                      <td className="p-2 text-gray-300 truncate max-w-[140px]">{order.customerName || order.customer?.name || order.contact_name || 'Sin nombre'}</td>
-                      <td className="p-2 text-gray-400 truncate max-w-[180px]">{order.address || order.shipping_address?.address || order.shipping_address?.street || '—'}</td>
-                      <td className="p-2 text-gray-400 truncate max-w-[100px]">{order.city || order.shipping_address?.city || '—'}</td>
-                      <td className="p-2 text-gray-400 truncate max-w-[120px] text-xs">{order.shippingMethod || order.shipping_option || order.shipping || '—'}</td>
-                      <td className="p-2 pr-3 text-right text-emerald-400 font-medium whitespace-nowrap">{formatPrice(order.total, order.currency)}</td>
-                    </tr>
-                  ))}
+                  {tnOrders.map(order => {
+                    const imported = order.alreadyImported
+                    return (
+                      <tr
+                        key={order.id}
+                        onClick={() => !imported && toggleSelect(order.id)}
+                        className={`transition-colors ${imported ? 'opacity-50' : 'cursor-pointer'} ${
+                          !imported && selected.has(order.id) ? 'bg-brand-500/5' : !imported ? 'hover:bg-navy-800/30' : ''
+                        }`}
+                      >
+                        <td className="p-2 pl-3" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={!imported && selected.has(order.id)}
+                            onChange={() => !imported && toggleSelect(order.id)}
+                            disabled={imported}
+                            className="rounded border-navy-700 bg-navy-900 text-brand-500 disabled:opacity-30"
+                          />
+                        </td>
+                        <td className="p-2 font-mono text-xs">
+                          <span className={imported ? 'text-gray-500' : 'text-white'}>#{order.number || order.orderNumber || order.id}</span>
+                          {imported && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-500 border border-gray-500/20">Ya importado</span>}
+                        </td>
+                        <td className="p-2 text-gray-300 truncate max-w-[140px]">{order.customerName || order.customer?.name || order.contact_name || 'Sin nombre'}</td>
+                        <td className="p-2 text-gray-400 truncate max-w-[180px]">{order.address || order.shipping_address?.address || order.shipping_address?.street || '—'}</td>
+                        <td className="p-2 text-gray-400 truncate max-w-[100px]">{order.city || order.shipping_address?.city || '—'}</td>
+                        <td className="p-2 text-gray-400 truncate max-w-[120px] text-xs">{order.shippingMethod || order.shipping_option || order.shipping || '—'}</td>
+                        <td className="p-2 pr-3 text-right text-emerald-400 font-medium whitespace-nowrap">{formatPrice(order.total, order.currency)}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
