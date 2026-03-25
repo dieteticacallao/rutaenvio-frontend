@@ -162,8 +162,8 @@ export default function Orders() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Status filters */}
+      <div className="flex gap-1.5 flex-wrap">
         {[
           { value: '', label: 'Todos' },
           { value: 'PENDING', label: 'Pendientes' },
@@ -172,7 +172,7 @@ export default function Orders() {
           { value: 'CANCELLED', label: 'Cancelados' },
         ].map(s => (
           <button key={s.value} onClick={() => setFilter(f => ({ ...f, status: s.value, page: 1 }))}
-            className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
+            className={`text-xs px-3 py-1.5 rounded-full transition-all duration-200 ${
               filter.status === s.value ? 'bg-brand-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white'
             }`}>
             {s.label}
@@ -180,65 +180,72 @@ export default function Orders() {
         ))}
       </div>
 
-      {/* Source filter */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Source + Zone filters */}
+      <div className="flex items-center gap-1.5 flex-wrap">
         {[
-          { value: '', label: 'Todos' },
-          { value: 'TIENDANUBE', label: 'Tiendanube' },
-          { value: 'MERCADOLIBRE', label: 'MercadoLibre' },
-          { value: 'EXCEL', label: 'Excel' },
-          { value: 'MANUAL', label: 'Manual' },
-        ].map(s => (
-          <button key={s.value} onClick={() => setFilter(f => ({ ...f, source: s.value, page: 1 }))}
-            className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
-              filter.source === s.value ? 'bg-brand-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white'
-            }`}>
-            {s.label}
-          </button>
-        ))}
-      </div>
+          { value: 'TIENDANUBE', label: 'TN', bg: '#6E3FA3', text: 'white' },
+          { value: 'MERCADOLIBRE', label: 'ML', bg: '#FFE600', text: 'black' },
+          { value: 'EXCEL', label: 'XLS', bg: '#217346', text: 'white' },
+          { value: 'MANUAL', label: 'MAN', bg: '#6B7280', text: 'white' },
+        ].map(s => {
+          const isActive = filter.source === s.value
+          return (
+            <button
+              key={s.value}
+              onClick={() => setFilter(f => ({ ...f, source: f.source === s.value ? '' : s.value, page: 1 }))}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-full transition-all duration-200 border"
+              style={isActive
+                ? { backgroundColor: s.bg, color: s.text, borderColor: s.bg }
+                : { backgroundColor: 'transparent', color: s.bg === '#FFE600' ? '#CA8A04' : s.bg, borderColor: s.bg === '#FFE600' ? '#CA8A04' : s.bg + '60' }
+              }
+            >
+              {s.label}
+            </button>
+          )
+        })}
 
-      {/* Zone filter */}
-      {zones.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setFilter(f => ({ ...f, zoneId: '', page: 1 }))}
-            className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
-              filter.zoneId === '' ? 'bg-brand-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white'
-            }`}
-          >
-            Todas
-          </button>
-          {zones.map(z => {
-            const colors = {
-              'CABA': { active: 'bg-blue-500 text-white', inactive: 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' },
-              'GBA 1': { active: 'bg-emerald-500 text-white', inactive: 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' },
-              'GBA 2': { active: 'bg-orange-500 text-white', inactive: 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' },
-              'GBA 3': { active: 'bg-red-500 text-white', inactive: 'bg-red-500/10 text-red-400 hover:bg-red-500/20' },
-              'Lejana': { active: 'bg-gray-500 text-white', inactive: 'bg-gray-500/10 text-gray-400 hover:bg-gray-500/20' },
-            }
-            const c = colors[z.name] || colors['Lejana']
-            const isActive = filter.zoneId === z.id
-            return (
-              <button
-                key={z.id}
-                onClick={() => setFilter(f => ({ ...f, zoneId: z.id, page: 1 }))}
-                className={`text-xs px-3 py-1.5 rounded-full transition-colors ${isActive ? c.active : c.inactive}`}
-              >
-                {z.name}
-              </button>
-            )
-          })}
-          <button
-            onClick={() => setFilter(f => ({ ...f, zoneId: 'none', page: 1 }))}
-            className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
-              filter.zoneId === 'none' ? 'bg-gray-600 text-white' : 'bg-navy-800 text-gray-500 hover:text-white'
-            }`}
-          >
-            Sin zona
-          </button>
-        </div>
-      )}
+        {zones.length > 0 && (
+          <>
+            <div className="w-px h-5 bg-navy-700 mx-1" />
+
+            {zones.map(z => {
+              const colorMap = {
+                'CABA': '#3B82F6',
+                'GBA 1': '#22C55E',
+                'GBA 2': '#F97316',
+                'GBA 3': '#EF4444',
+                'Lejana': '#6B7280',
+              }
+              const color = colorMap[z.name] || '#6B7280'
+              const isActive = filter.zoneId === z.id
+              return (
+                <button
+                  key={z.id}
+                  onClick={() => setFilter(f => ({ ...f, zoneId: f.zoneId === z.id ? '' : z.id, page: 1 }))}
+                  className="text-[11px] font-bold px-2.5 py-1 rounded-full transition-all duration-200 border"
+                  style={isActive
+                    ? { backgroundColor: color, color: '#fff', borderColor: color }
+                    : { backgroundColor: 'transparent', color: color, borderColor: color + '60' }
+                  }
+                >
+                  {z.name}
+                </button>
+              )
+            })}
+
+            <button
+              onClick={() => setFilter(f => ({ ...f, zoneId: f.zoneId === 'none' ? '' : 'none', page: 1 }))}
+              className={`text-[11px] font-bold px-2.5 py-1 rounded-full transition-all duration-200 border ${
+                filter.zoneId === 'none'
+                  ? 'bg-gray-500 text-white border-gray-500'
+                  : 'bg-transparent text-gray-500 border-gray-500/40'
+              }`}
+            >
+              Sin zona
+            </button>
+          </>
+        )}
+      </div>
 
       {/* Search and date filters */}
       <div className="space-y-3">
