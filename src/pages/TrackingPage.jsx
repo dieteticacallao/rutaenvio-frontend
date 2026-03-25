@@ -118,7 +118,7 @@ export default function TrackingPage() {
       mapInstance.current = L.map(mapRef.current, {
         center: [destLat, destLng],
         zoom: 14,
-        zoomControl: false,
+        zoomControl: true,
         attributionControl: false,
         dragging: true,
         scrollWheelZoom: false
