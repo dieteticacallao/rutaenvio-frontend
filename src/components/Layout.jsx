@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/store'
-import { LayoutDashboard, Package, Route, Users, Settings, LogOut, Truck, Clock, ChevronDown } from 'lucide-react'
+import { LayoutDashboard, Package, Route, Users, Settings, LogOut, Truck, Clock, ChevronDown, BarChart3 } from 'lucide-react'
 
 const mainLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -9,6 +9,7 @@ const mainLinks = [
 ]
 
 const bottomLinks = [
+  { to: '/stats', icon: BarChart3, label: 'Estadisticas' },
   { to: '/drivers', icon: Users, label: 'Cadetes' },
   { to: '/settings', icon: Settings, label: 'Config' },
 ]

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, useAuth } from '../lib/store'
-import { Settings as SettingsIcon, Store, MessageCircle, Link2, Check, AlertCircle, MapPin, Plus, Star, Trash2, Unplug } from 'lucide-react'
+import { Settings as SettingsIcon, Store, MessageCircle, Link2, Check, AlertCircle, MapPin, Plus, Star, Trash2, Unplug, Map, Pencil, Loader2, DollarSign } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -55,11 +55,173 @@ export default function Settings() {
       {/* Puntos de origen */}
       <LocationsSection />
 
+      {/* Zonas y tarifas */}
+      <ZonesSection />
+
       {/* Tiendanube integration */}
       <TiendanubeSection settings={settings} onSettingsUpdate={() => api.get('/dashboard/settings').then(r => setSettings(r.data))} />
 
       {/* WhatsApp integration */}
       <WhatsAppSection connected={settings?.integrations?.whatsapp} />
+    </div>
+  )
+}
+
+const ZONE_COLORS = {
+  'CABA': 'border-blue-500/30 bg-blue-500/5',
+  'GBA 1': 'border-emerald-500/30 bg-emerald-500/5',
+  'GBA 2': 'border-orange-500/30 bg-orange-500/5',
+  'GBA 3': 'border-red-500/30 bg-red-500/5',
+  'Lejana': 'border-gray-500/30 bg-gray-500/5',
+}
+
+const ZONE_BADGE = {
+  'CABA': 'bg-blue-500/20 text-blue-400',
+  'GBA 1': 'bg-emerald-500/20 text-emerald-400',
+  'GBA 2': 'bg-orange-500/20 text-orange-400',
+  'GBA 3': 'bg-red-500/20 text-red-400',
+  'Lejana': 'bg-gray-500/20 text-gray-400',
+}
+
+function ZonesSection() {
+  const [zones, setZones] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [seeding, setSeeding] = useState(false)
+  const [editingZone, setEditingZone] = useState(null)
+  const [editPrice, setEditPrice] = useState('')
+  const [editLocalities, setEditLocalities] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const loadZones = () => {
+    setLoading(true)
+    api.get('/zones').then(r => {
+      const data = r.data?.data || []
+      setZones(data)
+      setLoading(false)
+    }).catch(() => { setZones([]); setLoading(false) })
+  }
+
+  useEffect(() => { loadZones() }, [])
+
+  const seedZones = async () => {
+    setSeeding(true)
+    try {
+      await api.post('/zones/seed')
+      toast.success('Zonas por defecto creadas')
+      loadZones()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al crear zonas')
+    }
+    setSeeding(false)
+  }
+
+  const startEdit = (zone) => {
+    setEditingZone(zone.id)
+    setEditPrice(String(zone.tariffs?.[0]?.price || 0))
+    setEditLocalities((zone.localities || []).join(', '))
+  }
+
+  const saveEdit = async (zoneId) => {
+    setSaving(true)
+    try {
+      const localities = editLocalities.split(',').map(l => l.trim()).filter(Boolean)
+      await api.put(`/zones/${zoneId}`, { price: Number(editPrice), localities })
+      toast.success('Zona actualizada')
+      setEditingZone(null)
+      loadZones()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al guardar')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="card-p space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Map size={18} className="text-brand-400" />
+          <h2 className="font-semibold text-white">Zonas y Tarifas</h2>
+        </div>
+        {zones.length === 0 && !loading && (
+          <button onClick={seedZones} disabled={seeding} className="btn-primary text-xs">
+            {seeding ? <><Loader2 size={14} className="animate-spin" /> Creando...</> : <><Plus size={14} /> Cargar zonas por defecto</>}
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8 text-gray-500"><Loader2 size={20} className="animate-spin mr-2" /> Cargando zonas...</div>
+      ) : zones.length === 0 ? (
+        <p className="text-sm text-gray-500 text-center py-4">No hay zonas configuradas. Hace click en "Cargar zonas por defecto" para comenzar.</p>
+      ) : (
+        <div className="space-y-2">
+          {zones.map(zone => {
+            const isEditing = editingZone === zone.id
+            const price = zone.tariffs?.[0]?.price || 0
+            const colorClass = ZONE_COLORS[zone.name] || 'border-navy-700 bg-navy-800/50'
+            const badgeClass = ZONE_BADGE[zone.name] || 'bg-gray-500/20 text-gray-400'
+
+            return (
+              <div key={zone.id} className={`rounded-xl border p-3 ${colorClass}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeClass}`}>{zone.name}</span>
+                    {zone.description && <span className="text-xs text-gray-500">{zone.description}</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">{zone._count?.orders || 0} pedidos</span>
+                    {!isEditing && (
+                      <button onClick={() => startEdit(zone)} className="text-gray-500 hover:text-brand-400 transition-colors p-1">
+                        <Pencil size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {isEditing ? (
+                  <div className="space-y-2 mt-2">
+                    <div className="flex items-center gap-2">
+                      <DollarSign size={14} className="text-gray-500" />
+                      <input
+                        type="number"
+                        value={editPrice}
+                        onChange={e => setEditPrice(e.target.value)}
+                        className="input text-sm py-1.5 px-2 w-32"
+                        placeholder="Precio por envio"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 uppercase">Localidades (separadas por coma)</label>
+                      <textarea
+                        value={editLocalities}
+                        onChange={e => setEditLocalities(e.target.value)}
+                        className="input text-xs py-1.5 px-2 w-full mt-1 resize-none"
+                        rows={2}
+                      />
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => setEditingZone(null)} className="btn-secondary text-xs">Cancelar</button>
+                      <button onClick={() => saveEdit(zone.id)} disabled={saving} className="btn-primary text-xs">
+                        {saving ? 'Guardando...' : 'Guardar'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-gray-500 truncate flex-1 mr-4">
+                      {(zone.localities || []).length > 0
+                        ? (zone.localities || []).join(', ')
+                        : 'Sin localidades asignadas'
+                      }
+                    </div>
+                    <span className="text-sm font-bold text-white whitespace-nowrap">${price.toLocaleString('es-AR')}/envio</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
