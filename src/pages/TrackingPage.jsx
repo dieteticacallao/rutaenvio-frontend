@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { Package, Clock, Truck, CheckCircle2, Loader2, MapPin, User, Hash, AlertCircle, X, Phone, Route } from 'lucide-react'
+import { Package, Clock, Truck, CheckCircle2, Loader2, MapPin, User, Hash, AlertCircle, X, Route, CalendarClock } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -187,41 +187,45 @@ export default function TrackingPage() {
     return times
   }
 
-  // Calculate ETA as 4-hour range
+  // Calculate ETA as 4-hour range, capped at 23:00
   function getEtaRange() {
     if (!order) return null
     const ts = order.trackingStatus
-    if (ts === 'delivered') return null
+    if (ts === 'delivered' || ts === 'rescheduled') return null
     if (ts === 'preparing') return null
 
     const routeStartedAt = order.routeProgress?.startedAt
     if (!routeStartedAt) return { pending: true }
 
-    // Use estimatedArrival from backend if available
-    if (order.estimatedArrival) {
-      const center = new Date(order.estimatedArrival)
-      const from = new Date(center.getTime() - 2 * 60 * 60 * 1000)
-      const to = new Date(center.getTime() + 2 * 60 * 60 * 1000)
-      return {
-        from: from.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
-        to: to.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-      }
-    }
+    let center = null
 
-    // Fallback: use route start time + position * 15 min as center
-    if (order.routeProgress?.position) {
+    if (order.estimatedArrival) {
+      center = new Date(order.estimatedArrival)
+    } else if (order.routeProgress?.position) {
       const startTime = new Date(routeStartedAt)
       const estimatedMinutes = order.routeProgress.position * 15
-      const center = new Date(startTime.getTime() + estimatedMinutes * 60 * 1000)
-      const from = new Date(center.getTime() - 2 * 60 * 60 * 1000)
-      const to = new Date(center.getTime() + 2 * 60 * 60 * 1000)
-      return {
-        from: from.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
-        to: to.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-      }
+      center = new Date(startTime.getTime() + estimatedMinutes * 60 * 1000)
     }
 
-    return { pending: true }
+    if (!center) return { pending: true }
+
+    const from = new Date(center.getTime() - 2 * 60 * 60 * 1000)
+    const to = new Date(center.getTime() + 2 * 60 * 60 * 1000)
+
+    // Cap at 23:00 of the same day
+    const limit = new Date(from)
+    limit.setHours(23, 0, 0, 0)
+
+    if (from.getTime() >= limit.getTime()) {
+      return { nextDay: true }
+    }
+
+    if (to.getTime() > limit.getTime()) {
+      to.setHours(23, 0, 0, 0)
+    }
+
+    const fmt = (d) => d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+    return { from: fmt(from), to: fmt(to) }
   }
 
   if (loading) {
@@ -250,6 +254,7 @@ export default function TrackingPage() {
   const trackingStatus = order.trackingStatus || 'preparing'
   const currentStep = STATUS_TO_STEP[trackingStatus] ?? 0
   const isDelivered = trackingStatus === 'delivered'
+  const isRescheduled = trackingStatus === 'rescheduled'
   const isMoving = trackingStatus === 'in_route' || trackingStatus === 'on_the_way'
   const isCancelled = order.status === 'CANCELLED' || order.status === 'FAILED'
   const stepTimes = getStepTimes()
@@ -352,6 +357,16 @@ export default function TrackingPage() {
             </>
           )}
 
+          {isRescheduled && (
+            <>
+              <div className="w-20 h-20 rounded-full bg-amber-500/15 flex items-center justify-center mx-auto mb-4">
+                <CalendarClock size={40} className="text-amber-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Pedido reprogramado</h2>
+              <p className="text-sm text-gray-400">Vamos a realizar otro intento de entrega el dia de manana</p>
+            </>
+          )}
+
           {isCancelled && (
             <>
               <div className="w-20 h-20 rounded-full bg-red-500/15 flex items-center justify-center mx-auto mb-4">
@@ -366,12 +381,17 @@ export default function TrackingPage() {
         </div>
 
         {/* ETA Range */}
-        {etaRange && !isCancelled && (
+        {etaRange && !isCancelled && !isRescheduled && (
           <div className="mx-4 mb-4 rounded-xl border border-navy-800 bg-navy-900 p-4 text-center">
             {etaRange.pending ? (
               <>
                 <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Tiempo estimado de llegada</p>
                 <p className="text-sm text-gray-400">Pendiente de inicio de ruta</p>
+              </>
+            ) : etaRange.nextDay ? (
+              <>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Tiempo estimado de llegada</p>
+                <p className="text-sm text-amber-400">Tu pedido sera reprogramado para el dia siguiente</p>
               </>
             ) : (
               <>
@@ -385,7 +405,7 @@ export default function TrackingPage() {
         )}
 
         {/* Timeline */}
-        {!isCancelled && (
+        {!isCancelled && !isRescheduled && (
           <div className="px-5 pb-6">
             <div className="flex items-start justify-between relative">
               {/* Background line */}
@@ -473,30 +493,13 @@ export default function TrackingPage() {
           )}
 
           {order.driver?.name && (
-            <>
-              <div className="border-t border-navy-800 pt-3.5 flex items-center gap-3">
-                <Truck size={15} className="text-gray-500 flex-shrink-0" />
-                <div>
-                  <p className="text-[10px] text-gray-600 uppercase tracking-wider">Repartidor</p>
-                  <p className="text-sm text-white">{order.driver.name}</p>
-                </div>
+            <div className="border-t border-navy-800 pt-3.5 flex items-center gap-3">
+              <Truck size={15} className="text-gray-500 flex-shrink-0" />
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-wider">Repartidor</p>
+                <p className="text-sm text-white">{order.driver.name}</p>
               </div>
-
-              {order.driver.phone && !isDelivered && (
-                <div className="flex items-center gap-3">
-                  <Phone size={15} className="text-gray-500 flex-shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-gray-600 uppercase tracking-wider">Telefono del repartidor</p>
-                    <a
-                      href={`tel:${order.driver.phone}`}
-                      className="text-sm text-brand-400 hover:text-brand-300 transition-colors"
-                    >
-                      {order.driver.phone}
-                    </a>
-                  </div>
-                </div>
-              )}
-            </>
+            </div>
           )}
         </div>
 

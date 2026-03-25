@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { MapPin, Navigation, Phone, Package, CheckCircle2, Loader2, Camera, X, Truck, Clock, Play, ScanLine, PackageCheck } from 'lucide-react'
+import { MapPin, Navigation, Phone, Package, CheckCircle2, Loader2, Camera, X, Truck, Clock, Play, ScanLine, PackageCheck, MessageCircle, CalendarClock } from 'lucide-react'
 import { Html5Qrcode } from 'html5-qrcode'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -14,6 +14,7 @@ const STATUS_CONFIG = {
   DELIVERED: { label: 'Entregado', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
   FAILED: { label: 'Fallido', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
   CANCELLED: { label: 'Cancelado', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+  RESCHEDULED: { label: 'Reprogramado', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
 }
 
 function getDriverLocation() {
@@ -363,6 +364,27 @@ export default function RouteView() {
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(parts.join(', '))}`, '_blank')
   }
 
+  const rescheduleOrder = async (order) => {
+    if (!window.confirm(`Reprogramar pedido de ${order.customerName}? Se intentara entregar manana.`)) return
+    setUpdatingOrder(order.id)
+    try {
+      const r = await fetch(`${API}/driver-web/${token}/order/${order.id}/reschedule`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }
+      })
+      const data = await r.json()
+      if (data.success) {
+        setRoute(prev => ({
+          ...prev,
+          orders: prev.orders.map(o => o.id === order.id ? { ...o, status: 'RESCHEDULED' } : o)
+        }))
+      }
+    } catch (err) {
+      console.error('Error reprogramando pedido:', err)
+    } finally {
+      setUpdatingOrder(null)
+    }
+  }
+
   // --- Render ---
 
   if (loading) {
@@ -569,9 +591,19 @@ export default function RouteView() {
                 </div>
 
                 {order.customerPhone && (
-                  <a href={`tel:${order.customerPhone}`} className="text-xs text-brand-400 flex items-center gap-1 mt-1 no-underline">
-                    <Phone size={11} /> {order.customerPhone}
-                  </a>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <a href={`tel:${order.customerPhone}`} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-navy-800 text-brand-400 hover:bg-navy-700 transition-colors text-[11px] no-underline border border-navy-700">
+                      <Phone size={11} /> Llamar
+                    </a>
+                    <a
+                      href={`https://wa.me/${order.customerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${order.customerName}, soy tu repartidor de RutaEnvio. Estoy en camino con tu pedido #${order.orderNumber || ''}.`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors text-[11px] no-underline border border-emerald-500/20"
+                    >
+                      <MessageCircle size={11} /> WhatsApp
+                    </a>
+                  </div>
                 )}
 
                 {order.notes && (
@@ -629,33 +661,50 @@ export default function RouteView() {
                   </div>
                 )}
 
-                {/* ROUTE PHASE: navigate + deliver (after route started) */}
+                {/* Rescheduled info */}
+                {order.status === 'RESCHEDULED' && (
+                  <div className="mt-2 text-xs text-amber-400/70 flex items-center gap-1">
+                    <CalendarClock size={12} />
+                    <span>Reprogramado para manana</span>
+                  </div>
+                )}
+
+                {/* ROUTE PHASE: navigate + deliver + reschedule (after route started) */}
                 {routeStarted && (isPickedUp || isTransit) && (
-                  <div className="flex gap-2 mt-2.5">
+                  <div className="space-y-2 mt-2.5">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => navigateTo(order)}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-navy-800 text-white hover:bg-navy-950 transition-colors text-xs font-medium border border-navy-800"
+                      >
+                        <Navigation size={13} /> Navegar
+                      </button>
+                      {isPickedUp && (
+                        <button
+                          onClick={() => markInTransit(order.id)}
+                          disabled={isUpdating}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-xs font-medium disabled:opacity-50"
+                        >
+                          {isUpdating ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
+                          En camino
+                        </button>
+                      )}
+                      {isTransit && (
+                        <button
+                          onClick={() => openDeliverModal(order)}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors text-xs font-medium"
+                        >
+                          <CheckCircle2 size={13} /> Entregar
+                        </button>
+                      )}
+                    </div>
                     <button
-                      onClick={() => navigateTo(order)}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-navy-800 text-white hover:bg-navy-950 transition-colors text-xs font-medium border border-navy-800"
+                      onClick={() => rescheduleOrder(order)}
+                      disabled={isUpdating}
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors text-xs font-medium border border-amber-500/20 disabled:opacity-50"
                     >
-                      <Navigation size={13} /> Navegar
+                      <CalendarClock size={13} /> Reprogramar para manana
                     </button>
-                    {isPickedUp && (
-                      <button
-                        onClick={() => markInTransit(order.id)}
-                        disabled={isUpdating}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-xs font-medium disabled:opacity-50"
-                      >
-                        {isUpdating ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
-                        En camino
-                      </button>
-                    )}
-                    {isTransit && (
-                      <button
-                        onClick={() => openDeliverModal(order)}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors text-xs font-medium"
-                      >
-                        <CheckCircle2 size={13} /> Entregar
-                      </button>
-                    )}
                   </div>
                 )}
               </div>
