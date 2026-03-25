@@ -3,7 +3,7 @@ import { api } from '../lib/store'
 import { Package, Truck, CheckCircle2, TrendingUp, Star, DollarSign, Loader2, X } from 'lucide-react'
 
 function toLocalDate(d) {
-  return d.toISOString().slice(0, 10)
+  return (d || new Date()).toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
 }
 
 export const ZONE_COLORS = {

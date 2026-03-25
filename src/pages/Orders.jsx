@@ -274,7 +274,7 @@ export default function Orders() {
                 type="date"
                 value={dateFrom}
                 onChange={e => setDateFrom(e.target.value)}
-                className="input text-xs py-2 px-2.5"
+                className="input text-xs py-2 px-2.5 [color-scheme:dark]"
               />
             </div>
             <div className="flex items-center gap-1.5">
@@ -283,17 +283,17 @@ export default function Orders() {
                 type="date"
                 value={dateTo}
                 onChange={e => setDateTo(e.target.value)}
-                className="input text-xs py-2 px-2.5"
+                className="input text-xs py-2 px-2.5 [color-scheme:dark]"
               />
             </div>
           </div>
         </div>
         <div className="flex gap-2 flex-wrap items-center">
           {[
-            { label: 'Hoy', fn: () => { const d = new Date().toISOString().slice(0, 10); setDateFrom(d); setDateTo(d) } },
-            { label: 'Ayer', fn: () => { const d = new Date(Date.now() - 86400000).toISOString().slice(0, 10); setDateFrom(d); setDateTo(d) } },
-            { label: 'Esta semana', fn: () => { const now = new Date(); const day = now.getDay(); const diff = day === 0 ? 6 : day - 1; const mon = new Date(now); mon.setDate(now.getDate() - diff); setDateFrom(mon.toISOString().slice(0, 10)); setDateTo(now.toISOString().slice(0, 10)) } },
-            { label: 'Este mes', fn: () => { const now = new Date(); const first = new Date(now.getFullYear(), now.getMonth(), 1); setDateFrom(first.toISOString().slice(0, 10)); setDateTo(now.toISOString().slice(0, 10)) } },
+            { label: 'Hoy', fn: () => { const d = toLocalDate(); setDateFrom(d); setDateTo(d) } },
+            { label: 'Ayer', fn: () => { const d = toLocalDate(new Date(Date.now() - 86400000)); setDateFrom(d); setDateTo(d) } },
+            { label: 'Esta semana', fn: () => { const now = new Date(); const day = now.getDay(); const diff = day === 0 ? 6 : day - 1; const mon = new Date(now); mon.setDate(now.getDate() - diff); setDateFrom(toLocalDate(mon)); setDateTo(toLocalDate(now)) } },
+            { label: 'Este mes', fn: () => { const now = new Date(); const first = new Date(now.getFullYear(), now.getMonth(), 1); setDateFrom(toLocalDate(first)); setDateTo(toLocalDate(now)) } },
           ].map(btn => (
             <button key={btn.label} onClick={btn.fn}
               className="text-xs px-2.5 py-1.5 rounded-lg bg-navy-800 text-gray-400 hover:text-white hover:bg-navy-700 transition-colors">
