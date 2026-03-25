@@ -9,7 +9,7 @@ export default function Orders() {
   const [orders, setOrders] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState({ status: '', source: '', zoneId: '', page: 1 })
+  const [filter, setFilter] = useState({ status: '', sources: [], zoneIds: [], page: 1 })
   const [zones, setZones] = useState([])
   const [showCreate, setShowCreate] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
@@ -50,11 +50,11 @@ export default function Orders() {
     } else if (filter.status === 'EN_RUTA') {
       params.status = 'ASSIGNED,PICKED_UP,IN_TRANSIT,ARRIVED'
     }
-    if (filter.source) {
-      params.source = filter.source
+    if (filter.sources.length > 0) {
+      params.source = filter.sources.join(',')
     }
-    if (filter.zoneId) {
-      params.zoneId = filter.zoneId
+    if (filter.zoneIds.length > 0) {
+      params.zoneId = filter.zoneIds.join(',')
     }
     api.get('/orders', { params }).then(r => {
       const d = r.data
@@ -180,19 +180,39 @@ export default function Orders() {
         ))}
       </div>
 
-      {/* Source + Zone filters */}
+      {/* Source + Zone multi-select filters */}
       <div className="flex items-center gap-1.5 flex-wrap">
+        {(() => {
+          const allSources = ['TIENDANUBE', 'MERCADOLIBRE', 'EXCEL', 'MANUAL']
+          const allSelected = allSources.every(s => filter.sources.includes(s))
+          const noneSelected = filter.sources.length === 0
+          return (
+            <button
+              onClick={() => setFilter(f => ({ ...f, sources: allSelected || noneSelected ? [] : allSources, page: 1 }))}
+              className={`text-[11px] font-bold px-2.5 py-1 rounded-full transition-all duration-200 border ${
+                noneSelected ? 'bg-brand-500 text-white border-brand-500' : allSelected ? 'bg-brand-500 text-white border-brand-500' : 'bg-transparent text-gray-400 border-gray-600'
+              }`}
+            >
+              Todos
+            </button>
+          )
+        })()}
         {[
           { value: 'TIENDANUBE', label: 'TN', bg: '#6E3FA3', text: 'white' },
           { value: 'MERCADOLIBRE', label: 'ML', bg: '#FFE600', text: 'black' },
           { value: 'EXCEL', label: 'XLS', bg: '#217346', text: 'white' },
           { value: 'MANUAL', label: 'MAN', bg: '#6B7280', text: 'white' },
         ].map(s => {
-          const isActive = filter.source === s.value
+          const isActive = filter.sources.includes(s.value)
           return (
             <button
               key={s.value}
-              onClick={() => setFilter(f => ({ ...f, source: f.source === s.value ? '' : s.value, page: 1 }))}
+              onClick={() => setFilter(f => {
+                const next = f.sources.includes(s.value)
+                  ? f.sources.filter(v => v !== s.value)
+                  : [...f.sources, s.value]
+                return { ...f, sources: next, page: 1 }
+              })}
               className="text-[11px] font-bold px-2.5 py-1 rounded-full transition-all duration-200 border"
               style={isActive
                 ? { backgroundColor: s.bg, color: s.text, borderColor: s.bg }
@@ -208,6 +228,22 @@ export default function Orders() {
           <>
             <div className="w-px h-5 bg-navy-700 mx-1" />
 
+            {(() => {
+              const allZoneIds = [...zones.map(z => z.id), 'none']
+              const allSelected = allZoneIds.every(id => filter.zoneIds.includes(id))
+              const noneSelected = filter.zoneIds.length === 0
+              return (
+                <button
+                  onClick={() => setFilter(f => ({ ...f, zoneIds: allSelected || noneSelected ? [] : allZoneIds, page: 1 }))}
+                  className={`text-[11px] font-bold px-2.5 py-1 rounded-full transition-all duration-200 border ${
+                    noneSelected ? 'bg-brand-500 text-white border-brand-500' : allSelected ? 'bg-brand-500 text-white border-brand-500' : 'bg-transparent text-gray-400 border-gray-600'
+                  }`}
+                >
+                  Todas
+                </button>
+              )
+            })()}
+
             {zones.map(z => {
               const colorMap = {
                 'CABA': '#3B82F6',
@@ -217,11 +253,16 @@ export default function Orders() {
                 'Lejana': '#6B7280',
               }
               const color = colorMap[z.name] || '#6B7280'
-              const isActive = filter.zoneId === z.id
+              const isActive = filter.zoneIds.includes(z.id)
               return (
                 <button
                   key={z.id}
-                  onClick={() => setFilter(f => ({ ...f, zoneId: f.zoneId === z.id ? '' : z.id, page: 1 }))}
+                  onClick={() => setFilter(f => {
+                    const next = f.zoneIds.includes(z.id)
+                      ? f.zoneIds.filter(v => v !== z.id)
+                      : [...f.zoneIds, z.id]
+                    return { ...f, zoneIds: next, page: 1 }
+                  })}
                   className="text-[11px] font-bold px-2.5 py-1 rounded-full transition-all duration-200 border"
                   style={isActive
                     ? { backgroundColor: color, color: '#fff', borderColor: color }
@@ -234,9 +275,14 @@ export default function Orders() {
             })}
 
             <button
-              onClick={() => setFilter(f => ({ ...f, zoneId: f.zoneId === 'none' ? '' : 'none', page: 1 }))}
+              onClick={() => setFilter(f => {
+                const next = f.zoneIds.includes('none')
+                  ? f.zoneIds.filter(v => v !== 'none')
+                  : [...f.zoneIds, 'none']
+                return { ...f, zoneIds: next, page: 1 }
+              })}
               className={`text-[11px] font-bold px-2.5 py-1 rounded-full transition-all duration-200 border ${
-                filter.zoneId === 'none'
+                filter.zoneIds.includes('none')
                   ? 'bg-gray-500 text-white border-gray-500'
                   : 'bg-transparent text-gray-500 border-gray-500/40'
               }`}
@@ -300,9 +346,9 @@ export default function Orders() {
               {btn.label}
             </button>
           ))}
-          {(searchQuery || dateFrom || dateTo || filter.status || filter.source || filter.zoneId) && (
+          {(searchQuery || dateFrom || dateTo || filter.status || filter.sources.length > 0 || filter.zoneIds.length > 0) && (
             <button
-              onClick={() => { setSearchQuery(''); setDateFrom(''); setDateTo(''); setFilter(f => ({ ...f, status: '', source: '', zoneId: '', page: 1 })) }}
+              onClick={() => { setSearchQuery(''); setDateFrom(''); setDateTo(''); setFilter(f => ({ ...f, status: '', sources: [], zoneIds: [], page: 1 })) }}
               className="text-xs px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-1"
             >
               <X size={12} /> Limpiar filtros
