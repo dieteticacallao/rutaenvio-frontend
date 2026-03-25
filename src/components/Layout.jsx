@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/store'
-import { LayoutDashboard, Package, Route, Users, Settings, LogOut, Truck, Clock, ChevronDown, BarChart3 } from 'lucide-react'
+import { LayoutDashboard, Package, Route, Users, Settings, LogOut, Truck, Clock, ChevronDown, BarChart3, Receipt } from 'lucide-react'
 
 const mainLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -9,7 +9,6 @@ const mainLinks = [
 ]
 
 const bottomLinks = [
-  { to: '/stats', icon: BarChart3, label: 'Estadisticas' },
   { to: '/drivers', icon: Users, label: 'Cadetes' },
   { to: '/settings', icon: Settings, label: 'Config' },
 ]
@@ -20,7 +19,9 @@ export default function Layout({ children }) {
   const location = useLocation()
 
   const isRoutesSection = location.pathname.startsWith('/routes')
+  const isStatsSection = location.pathname.startsWith('/stats')
   const [routesOpen, setRoutesOpen] = useState(isRoutesSection)
+  const [statsOpen, setStatsOpen] = useState(isStatsSection)
 
   const linkClass = (isActive) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
     isActive
@@ -82,6 +83,37 @@ export default function Layout({ children }) {
               <NavLink to="/routes/history" className={({ isActive }) => subLinkClass(isActive)}>
                 <Truck size={14} />
                 Rutas
+              </NavLink>
+            </div>
+          )}
+
+          {/* Estadisticas with submenu */}
+          <button
+            onClick={() => setStatsOpen(o => !o)}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 w-full ${
+              isStatsSection
+                ? 'bg-brand-500/10 text-brand-400 font-medium'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-navy-800/50'
+            }`}
+          >
+            <BarChart3 size={18} />
+            <span className="flex-1 text-left">Estadisticas</span>
+            <ChevronDown size={14} className={`transition-transform duration-200 ${statsOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {statsOpen && (
+            <div className="space-y-0.5">
+              <NavLink to="/stats" end className={({ isActive }) => subLinkClass(isActive)}>
+                <BarChart3 size={14} />
+                General
+              </NavLink>
+              <NavLink to="/stats/drivers" className={({ isActive }) => subLinkClass(isActive)}>
+                <Users size={14} />
+                Cadetes
+              </NavLink>
+              <NavLink to="/stats/billing" className={({ isActive }) => subLinkClass(isActive)}>
+                <Receipt size={14} />
+                Facturacion
               </NavLink>
             </div>
           )}

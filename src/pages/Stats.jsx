@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '../lib/store'
-import { BarChart3, Users, Receipt, Loader2, ArrowUpDown, X } from 'lucide-react'
+import { Package, Truck, CheckCircle2, TrendingUp, Star, DollarSign, Loader2, X } from 'lucide-react'
 
 function toLocalDate(d) {
   return d.toISOString().slice(0, 10)
 }
 
-const ZONE_COLORS = {
+export const ZONE_COLORS = {
   'CABA': 'bg-blue-500/20 text-blue-400 border-blue-500/20',
   'GBA 1': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20',
   'GBA 2': 'bg-orange-500/20 text-orange-400 border-orange-500/20',
@@ -15,7 +15,7 @@ const ZONE_COLORS = {
   'Sin zona': 'bg-gray-500/20 text-gray-500 border-gray-500/20',
 }
 
-const ZONE_BAR_COLORS = {
+export const ZONE_BAR_COLORS = {
   'CABA': 'bg-blue-500',
   'GBA 1': 'bg-emerald-500',
   'GBA 2': 'bg-orange-500',
@@ -24,44 +24,8 @@ const ZONE_BAR_COLORS = {
   'Sin zona': 'bg-gray-700',
 }
 
-export default function Stats() {
-  const [tab, setTab] = useState('cadetes')
-
-  return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-white">Estadisticas</h1>
-        <p className="text-sm text-gray-500">Rendimiento de cadetes y facturacion por zona</p>
-      </div>
-
-      <div className="flex gap-2">
-        <button
-          onClick={() => setTab('cadetes')}
-          className={`flex items-center gap-2 text-sm px-4 py-2 rounded-lg transition-colors ${
-            tab === 'cadetes' ? 'bg-brand-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white'
-          }`}
-        >
-          <Users size={16} /> Cadetes
-        </button>
-        <button
-          onClick={() => setTab('facturacion')}
-          className={`flex items-center gap-2 text-sm px-4 py-2 rounded-lg transition-colors ${
-            tab === 'facturacion' ? 'bg-brand-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white'
-          }`}
-        >
-          <Receipt size={16} /> Facturacion
-        </button>
-      </div>
-
-      {tab === 'cadetes' && <CadetesTab />}
-      {tab === 'facturacion' && <FacturacionTab />}
-    </div>
-  )
-}
-
-function DateFilter({ dateFrom, dateTo, setDateFrom, setDateTo }) {
+export function DateFilter({ dateFrom, dateTo, setDateFrom, setDateTo }) {
   const today = toLocalDate(new Date())
-  const yesterday = toLocalDate(new Date(Date.now() - 86400000))
   const weekStart = (() => {
     const now = new Date()
     const day = now.getDay()
@@ -106,196 +70,178 @@ function DateFilter({ dateFrom, dateTo, setDateFrom, setDateTo }) {
   )
 }
 
-function CadetesTab() {
-  const [data, setData] = useState([])
+export default function Stats() {
+  const [dashStats, setDashStats] = useState(null)
+  const [driverStats, setDriverStats] = useState([])
+  const [billingStats, setBillingStats] = useState(null)
+  const [weeklyData, setWeeklyData] = useState([])
   const [loading, setLoading] = useState(true)
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [sortKey, setSortKey] = useState('delivered')
-  const [sortDir, setSortDir] = useState('desc')
 
-  const load = useCallback(() => {
-    setLoading(true)
-    const params = {}
-    if (dateFrom) params.dateFrom = dateFrom
-    if (dateTo) params.dateTo = dateTo
-    api.get('/zones/driver-stats', { params }).then(r => {
-      setData(r.data?.data || [])
+  useEffect(() => {
+    const today = toLocalDate(new Date())
+    const monthStart = toLocalDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+
+    // Last 7 days dates
+    const days = []
+    for (let i = 6; i >= 0; i--) {
+      days.push(toLocalDate(new Date(Date.now() - i * 86400000)))
+    }
+
+    Promise.all([
+      api.get('/dashboard/stats').catch(() => ({ data: null })),
+      api.get('/zones/driver-stats', { params: { dateFrom: today, dateTo: today } }).catch(() => ({ data: { data: [] } })),
+      api.get('/zones/billing', { params: { dateFrom: monthStart, dateTo: today } }).catch(() => ({ data: { data: null } })),
+      // Fetch delivered per day for last 7 days
+      Promise.all(days.map(d =>
+        api.get('/zones/driver-stats', { params: { dateFrom: d, dateTo: d } })
+          .then(r => ({ date: d, delivered: (r.data?.data || []).reduce((sum, dr) => sum + dr.delivered, 0) }))
+          .catch(() => ({ date: d, delivered: 0 }))
+      ))
+    ]).then(([dashRes, driverRes, billingRes, weeklyRes]) => {
+      setDashStats(dashRes.data)
+      setDriverStats(driverRes.data?.data || [])
+      setBillingStats(billingRes.data?.data || null)
+      setWeeklyData(weeklyRes)
       setLoading(false)
-    }).catch(() => { setData([]); setLoading(false) })
-  }, [dateFrom, dateTo])
+    })
+  }, [])
 
-  useEffect(() => { load() }, [load])
-
-  const toggleSort = (key) => {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(key); setSortDir('desc') }
-  }
-
-  const sorted = [...data].sort((a, b) => {
-    const mul = sortDir === 'asc' ? 1 : -1
-    return (a[sortKey] - b[sortKey]) * mul
-  })
-
-  const rateColor = (pct) => {
-    if (pct >= 90) return 'bg-emerald-500'
-    if (pct >= 70) return 'bg-yellow-500'
-    return 'bg-red-500'
-  }
-
-  const SortHeader = ({ label, field }) => (
-    <th className="p-3 text-left cursor-pointer hover:text-gray-300 select-none" onClick={() => toggleSort(field)}>
-      <span className="flex items-center gap-1">
-        {label}
-        {sortKey === field && <ArrowUpDown size={10} className="text-brand-400" />}
-      </span>
-    </th>
-  )
-
-  return (
-    <div className="space-y-4">
-      <DateFilter dateFrom={dateFrom} dateTo={dateTo} setDateFrom={setDateFrom} setDateTo={setDateTo} />
-
-      {loading ? (
-        <div className="flex items-center justify-center h-48 text-gray-500"><Loader2 size={24} className="animate-spin mr-2" /> Cargando...</div>
-      ) : data.length === 0 ? (
-        <div className="card-p text-center py-12 text-gray-500">No hay datos de cadetes para el periodo seleccionado</div>
-      ) : (
-        <div className="card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-navy-800 text-xs text-gray-500 uppercase tracking-wider">
-                <th className="p-3 text-left">Cadete</th>
-                <SortHeader label="Entregas" field="delivered" />
-                <SortHeader label="% Entrega" field="deliveryRate" />
-                <SortHeader label="Prom. min" field="avgMinutes" />
-                <SortHeader label="Rutas" field="routes" />
-                <SortHeader label="% Rutas" field="routeCompletionRate" />
-                <SortHeader label="Rating" field="rating" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-navy-800/50">
-              {sorted.map(d => (
-                <tr key={d.id} className="hover:bg-navy-800/30 transition-colors">
-                  <td className="p-3 text-white font-medium">{d.name}</td>
-                  <td className="p-3 text-gray-300">{d.delivered}</td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 bg-navy-800 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${rateColor(d.deliveryRate)}`} style={{ width: `${d.deliveryRate}%` }} />
-                      </div>
-                      <span className="text-xs text-gray-400">{d.deliveryRate}%</span>
-                    </div>
-                  </td>
-                  <td className="p-3 text-gray-300">{d.avgMinutes > 0 ? `${d.avgMinutes} min` : '—'}</td>
-                  <td className="p-3 text-gray-300">{d.completedRoutes}/{d.routes}</td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 bg-navy-800 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${rateColor(d.routeCompletionRate)}`} style={{ width: `${d.routeCompletionRate}%` }} />
-                      </div>
-                      <span className="text-xs text-gray-400">{d.routeCompletionRate}%</span>
-                    </div>
-                  </td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map(n => (
-                        <span key={n} className={`text-xs ${n <= Math.round(d.rating) ? 'text-yellow-400' : 'text-gray-700'}`}>&#9733;</span>
-                      ))}
-                      <span className="text-xs text-gray-500 ml-1">{d.rating > 0 ? d.rating.toFixed(1) : '—'}</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h1 className="text-xl font-bold text-white">Estadisticas</h1>
+          <p className="text-sm text-gray-500">Resumen general</p>
         </div>
-      )}
-    </div>
-  )
-}
+        <div className="flex items-center justify-center h-48 text-gray-500"><Loader2 size={24} className="animate-spin mr-2" /> Cargando...</div>
+      </div>
+    )
+  }
 
-function FacturacionTab() {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const todayDelivered = dashStats?.today?.delivered || 0
+  const todayTotal = dashStats?.today?.total || 0
+  const deliveryPct = todayTotal > 0 ? Math.round((todayDelivered / todayTotal) * 100) : 0
+  const inTransit = dashStats?.inTransit || 0
+  const monthBilling = billingStats?.total || 0
 
-  const load = useCallback(() => {
-    setLoading(true)
-    const params = {}
-    if (dateFrom) params.dateFrom = dateFrom
-    if (dateTo) params.dateTo = dateTo
-    api.get('/zones/billing', { params }).then(r => {
-      setData(r.data?.data || null)
-      setLoading(false)
-    }).catch(() => { setData(null); setLoading(false) })
-  }, [dateFrom, dateTo])
+  // Best driver today
+  const bestDriver = driverStats.length > 0
+    ? driverStats.reduce((best, d) => d.deliveryRate > (best?.deliveryRate || 0) ? d : best, null)
+    : null
 
-  useEffect(() => { load() }, [load])
+  // Weekly chart
+  const maxWeekly = Math.max(...weeklyData.map(d => d.delivered), 1)
 
-  const zones = data?.zones || []
-  const total = data?.total || 0
-  const maxCount = Math.max(...zones.map(z => z.count), 1)
+  // Zone distribution
+  const zones = billingStats?.zones?.filter(z => z.count > 0) || []
+  const totalZoneCount = zones.reduce((sum, z) => sum + z.count, 0) || 1
 
   return (
-    <div className="space-y-4">
-      <DateFilter dateFrom={dateFrom} dateTo={dateTo} setDateFrom={setDateFrom} setDateTo={setDateTo} />
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-xl font-bold text-white">Estadisticas</h1>
+        <p className="text-sm text-gray-500">Resumen general del negocio</p>
+      </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center h-48 text-gray-500"><Loader2 size={24} className="animate-spin mr-2" /> Cargando...</div>
-      ) : !data || zones.length === 0 ? (
-        <div className="card-p text-center py-12 text-gray-500">No hay datos de facturacion. Configura las zonas en Config primero.</div>
-      ) : (
-        <>
-          {/* Zone cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {zones.map(z => (
-              <div key={z.name} className="card-p space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${ZONE_COLORS[z.name] || ZONE_COLORS['Sin zona']}`}>{z.name}</span>
-                  <span className="text-xs text-gray-500">{z.count} envios</span>
-                </div>
-                <div className="flex items-end justify-between">
-                  <div>
-                    <p className="text-[10px] text-gray-600 uppercase">Precio/envio</p>
-                    <p className="text-sm text-gray-300">${z.price.toLocaleString('es-AR')}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-gray-600 uppercase">Subtotal</p>
-                    <p className="text-lg font-bold text-white">${z.subtotal.toLocaleString('es-AR')}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div className="card-p">
+          <div className="flex items-center gap-2 mb-2">
+            <Package size={14} className="text-blue-400" />
+            <span className="text-[10px] text-gray-500 uppercase">Pedidos hoy</span>
           </div>
+          <p className="text-2xl font-bold text-white">{todayTotal}</p>
+        </div>
 
-          {/* Bar chart */}
-          <div className="card-p">
-            <h3 className="text-sm font-semibold text-white mb-4">Distribucion por zona</h3>
+        <div className="card-p">
+          <div className="flex items-center gap-2 mb-2">
+            <Truck size={14} className="text-sky-400" />
+            <span className="text-[10px] text-gray-500 uppercase">En ruta</span>
+          </div>
+          <p className="text-2xl font-bold text-white">{inTransit}</p>
+        </div>
+
+        <div className="card-p">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 size={14} className="text-emerald-400" />
+            <span className="text-[10px] text-gray-500 uppercase">Entregados hoy</span>
+          </div>
+          <p className="text-2xl font-bold text-white">{todayDelivered}</p>
+        </div>
+
+        <div className="card-p">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingUp size={14} className="text-brand-400" />
+            <span className="text-[10px] text-gray-500 uppercase">% Entrega hoy</span>
+          </div>
+          <p className="text-2xl font-bold text-white">{deliveryPct}%</p>
+        </div>
+
+        <div className="card-p">
+          <div className="flex items-center gap-2 mb-2">
+            <Star size={14} className="text-yellow-400" />
+            <span className="text-[10px] text-gray-500 uppercase">Cadete destacado</span>
+          </div>
+          <p className="text-lg font-bold text-white truncate">{bestDriver?.name || '—'}</p>
+          {bestDriver && <p className="text-xs text-gray-500">{bestDriver.delivered} entregas - {bestDriver.deliveryRate}%</p>}
+        </div>
+
+        <div className="card-p">
+          <div className="flex items-center gap-2 mb-2">
+            <DollarSign size={14} className="text-emerald-400" />
+            <span className="text-[10px] text-gray-500 uppercase">Facturacion mes</span>
+          </div>
+          <p className="text-2xl font-bold text-white">${monthBilling.toLocaleString('es-AR')}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Weekly deliveries chart */}
+        <div className="card-p">
+          <h3 className="text-sm font-semibold text-white mb-4">Entregas ultimos 7 dias</h3>
+          <div className="flex items-end gap-2 h-32">
+            {weeklyData.map(d => {
+              const pct = (d.delivered / maxWeekly) * 100
+              const dayLabel = new Date(d.date + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'short' })
+              return (
+                <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
+                  <span className="text-[10px] text-gray-500">{d.delivered}</span>
+                  <div className="w-full bg-navy-800 rounded-t-md overflow-hidden" style={{ height: '80px' }}>
+                    <div
+                      className="bg-brand-500 rounded-t-md w-full transition-all"
+                      style={{ height: `${pct}%`, marginTop: `${100 - pct}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-gray-600">{dayLabel}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Zone distribution */}
+        <div className="card-p">
+          <h3 className="text-sm font-semibold text-white mb-4">Distribucion por zona (mes)</h3>
+          {zones.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-8">Sin datos de zonas</p>
+          ) : (
             <div className="space-y-2.5">
-              {zones.filter(z => z.count > 0).map(z => (
+              {zones.map(z => (
                 <div key={z.name} className="flex items-center gap-3">
-                  <span className="text-xs text-gray-400 w-16 text-right flex-shrink-0">{z.name}</span>
+                  <span className="text-xs text-gray-400 w-14 text-right flex-shrink-0">{z.name}</span>
                   <div className="flex-1 h-5 bg-navy-800 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full ${ZONE_BAR_COLORS[z.name] || 'bg-gray-600'} transition-all`}
-                      style={{ width: `${(z.count / maxCount) * 100}%` }}
+                      style={{ width: `${(z.count / totalZoneCount) * 100}%` }}
                     />
                   </div>
-                  <span className="text-xs text-gray-400 w-12 flex-shrink-0">{z.count}</span>
+                  <span className="text-xs text-gray-500 w-20 flex-shrink-0">{z.count} ({Math.round((z.count / totalZoneCount) * 100)}%)</span>
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Total */}
-          <div className="card-p text-center">
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Total facturado</p>
-            <p className="text-3xl font-bold text-white">${total.toLocaleString('es-AR')}</p>
-          </div>
-        </>
-      )}
+          )}
+        </div>
+      </div>
     </div>
   )
 }

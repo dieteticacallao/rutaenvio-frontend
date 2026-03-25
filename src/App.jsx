@@ -13,6 +13,8 @@ import TrackingPage from './pages/TrackingPage'
 import RouteView from './pages/RouteView'
 import RoutesHistory from './pages/RoutesHistory'
 import Stats from './pages/Stats'
+import StatsDrivers from './pages/StatsDrivers'
+import StatsBilling from './pages/StatsBilling'
 
 export default function App() {
   const { isAuthenticated, loadUser, token } = useAuth()
@@ -49,6 +51,8 @@ export default function App() {
         <Route path="/routes" element={<RouteDistribution />} />
         <Route path="/routes/history" element={<RoutesHistory />} />
         <Route path="/stats" element={<Stats />} />
+        <Route path="/stats/drivers" element={<StatsDrivers />} />
+        <Route path="/stats/billing" element={<StatsBilling />} />
         <Route path="/drivers" element={<Drivers />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" />} />
