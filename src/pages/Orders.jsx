@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP } from '../lib/store'
-import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Upload, AlertCircle, CheckCircle2, Link2 } from 'lucide-react'
+import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Upload, AlertCircle, CheckCircle2, Link2, ChevronDown, Cloud, ShoppingBag, ShoppingCart } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Orders() {
@@ -18,6 +18,19 @@ export default function Orders() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [tnConnected, setTnConnected] = useState(false)
+  const [importDropdown, setImportDropdown] = useState(false)
+  const importDropdownRef = useRef(null)
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (importDropdownRef.current && !importDropdownRef.current.contains(e.target)) {
+        setImportDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   useEffect(() => {
     api.get('/dashboard/settings').then(r => {
@@ -109,9 +122,33 @@ export default function Orders() {
           <button onClick={() => setShowExcelModal(true)} className="btn-secondary">
             <FileSpreadsheet size={16} /> Importar Excel
           </button>
-          <button onClick={handleTNImport} className="btn-secondary">
-            <Download size={16} /> Importar de TN
-          </button>
+          <div className="relative" ref={importDropdownRef}>
+            <button onClick={() => setImportDropdown(v => !v)} className="btn-secondary">
+              <Download size={16} /> Importar <ChevronDown size={14} />
+            </button>
+            {importDropdown && (
+              <div className="absolute right-0 top-full mt-1.5 w-56 bg-navy-900 border border-navy-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                <button
+                  onClick={() => { setImportDropdown(false); handleTNImport() }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white hover:bg-navy-800 transition-colors text-left"
+                >
+                  <Cloud size={16} className="text-purple-400" />
+                  <span>Tiendanube</span>
+                  {tnConnected && <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">Conectada</span>}
+                </button>
+                <button disabled className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-600 cursor-not-allowed text-left">
+                  <ShoppingBag size={16} />
+                  <span>MercadoLibre</span>
+                  <span className="ml-auto text-[9px] text-gray-600">Proximamente</span>
+                </button>
+                <button disabled className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-600 cursor-not-allowed text-left">
+                  <ShoppingCart size={16} />
+                  <span>Shopify</span>
+                  <span className="ml-auto text-[9px] text-gray-600">Proximamente</span>
+                </button>
+              </div>
+            )}
+          </div>
           <button onClick={() => setShowCreate(true)} className="btn-primary">
             <Plus size={16} /> Nuevo pedido
           </button>
