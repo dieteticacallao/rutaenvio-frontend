@@ -9,7 +9,8 @@ export default function Orders() {
   const [orders, setOrders] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState({ status: '', source: '', page: 1 })
+  const [filter, setFilter] = useState({ status: '', source: '', zoneId: '', page: 1 })
+  const [zones, setZones] = useState([])
   const [showCreate, setShowCreate] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
   const [showExcelModal, setShowExcelModal] = useState(false)
@@ -36,6 +37,9 @@ export default function Orders() {
     api.get('/dashboard/settings').then(r => {
       setTnConnected(!!r.data?.tnStoreId)
     }).catch(() => {})
+    api.get('/zones').then(r => {
+      setZones(r.data?.data || [])
+    }).catch(() => {})
   }, [])
 
   const loadOrders = useCallback(() => {
@@ -48,6 +52,9 @@ export default function Orders() {
     }
     if (filter.source) {
       params.source = filter.source
+    }
+    if (filter.zoneId) {
+      params.zoneId = filter.zoneId
     }
     api.get('/orders', { params }).then(r => {
       const d = r.data
@@ -191,6 +198,48 @@ export default function Orders() {
         ))}
       </div>
 
+      {/* Zone filter */}
+      {zones.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setFilter(f => ({ ...f, zoneId: '', page: 1 }))}
+            className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
+              filter.zoneId === '' ? 'bg-brand-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white'
+            }`}
+          >
+            Todas
+          </button>
+          {zones.map(z => {
+            const colors = {
+              'CABA': { active: 'bg-blue-500 text-white', inactive: 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' },
+              'GBA 1': { active: 'bg-emerald-500 text-white', inactive: 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' },
+              'GBA 2': { active: 'bg-orange-500 text-white', inactive: 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' },
+              'GBA 3': { active: 'bg-red-500 text-white', inactive: 'bg-red-500/10 text-red-400 hover:bg-red-500/20' },
+              'Lejana': { active: 'bg-gray-500 text-white', inactive: 'bg-gray-500/10 text-gray-400 hover:bg-gray-500/20' },
+            }
+            const c = colors[z.name] || colors['Lejana']
+            const isActive = filter.zoneId === z.id
+            return (
+              <button
+                key={z.id}
+                onClick={() => setFilter(f => ({ ...f, zoneId: z.id, page: 1 }))}
+                className={`text-xs px-3 py-1.5 rounded-full transition-colors ${isActive ? c.active : c.inactive}`}
+              >
+                {z.name}
+              </button>
+            )
+          })}
+          <button
+            onClick={() => setFilter(f => ({ ...f, zoneId: 'none', page: 1 }))}
+            className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
+              filter.zoneId === 'none' ? 'bg-gray-600 text-white' : 'bg-navy-800 text-gray-500 hover:text-white'
+            }`}
+          >
+            Sin zona
+          </button>
+        </div>
+      )}
+
       {/* Search and date filters */}
       <div className="space-y-3">
         <div className="flex gap-3 flex-wrap items-end">
@@ -244,9 +293,9 @@ export default function Orders() {
               {btn.label}
             </button>
           ))}
-          {(searchQuery || dateFrom || dateTo || filter.status || filter.source) && (
+          {(searchQuery || dateFrom || dateTo || filter.status || filter.source || filter.zoneId) && (
             <button
-              onClick={() => { setSearchQuery(''); setDateFrom(''); setDateTo(''); setFilter(f => ({ ...f, status: '', source: '', page: 1 })) }}
+              onClick={() => { setSearchQuery(''); setDateFrom(''); setDateTo(''); setFilter(f => ({ ...f, status: '', source: '', zoneId: '', page: 1 })) }}
               className="text-xs px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-1"
             >
               <X size={12} /> Limpiar filtros
