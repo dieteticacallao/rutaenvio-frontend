@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP } from '../lib/store'
-import { Clock, Package, QrCode, Copy, MessageCircle, ArrowLeft, ChevronRight, Search, Filter, XCircle, X, Printer, Trash2, CheckCircle2 } from 'lucide-react'
+import { Clock, Package, QrCode, Copy, MessageCircle, ArrowLeft, ChevronRight, Search, Filter, XCircle, X, Printer, Trash2, CheckCircle2, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const ROUTE_STATUS_MAP = {
@@ -12,6 +13,7 @@ const ROUTE_STATUS_MAP = {
 }
 
 export default function RoutesHistory() {
+  const navigate = useNavigate()
   const [routes, setRoutes] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedRoute, setSelectedRoute] = useState(null)
@@ -262,8 +264,9 @@ export default function RoutesHistory() {
             <div className="space-y-1">
               {selectedRoute.orders?.map(order => {
                 const st = STATUS_MAP[order.status] || { label: order.status, color: 'badge-pending' }
+                const trackingLink = order.trackingCode ? `https://rutaenvio-frontend.vercel.app/track/${order.trackingCode}` : null
                 return (
-                  <div key={order.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-navy-800/50">
+                  <div key={order.id} className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-navy-800/50 cursor-pointer group" onClick={() => navigate(`/orders/${order.id}`)}>
                     <div className="w-6 h-6 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center text-xs font-bold flex-shrink-0">
                       {order.routePosition}
                     </div>
@@ -271,19 +274,48 @@ export default function RoutesHistory() {
                       <div className="text-sm text-white truncate">{order.customerName}</div>
                       <div className="text-xs text-gray-500 truncate">{order.address}</div>
                       {order.orderNumber && (
-                        <div className="text-[10px] text-gray-600 font-mono">{order.orderNumber}</div>
+                        <div className="text-[10px] text-gray-600 font-mono">#{order.orderNumber}</div>
                       )}
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
-                    {order.status !== 'DELIVERED' && selectedRoute.status !== 'CANCELLED' && (
+                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                      {trackingLink && (
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(trackingLink); toast.success('Link de tracking copiado') }}
+                          className="text-gray-600 hover:text-brand-400 transition-colors p-1.5 rounded-lg hover:bg-navy-800"
+                          title="Copiar link de tracking"
+                        >
+                          <Copy size={14} />
+                        </button>
+                      )}
+                      {trackingLink && order.customerPhone && (
+                        <a
+                          href={`https://wa.me/${order.customerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${order.customerName}! Tu pedido #${order.orderNumber || ''} esta en camino. Podes seguirlo aca: ${trackingLink}`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-gray-600 hover:text-emerald-400 transition-colors p-1.5 rounded-lg hover:bg-emerald-500/10"
+                          title="Enviar tracking por WhatsApp"
+                        >
+                          <MessageCircle size={14} />
+                        </a>
+                      )}
                       <button
-                        onClick={() => removeOrder(selectedRoute.id, order.id, order.customerName)}
-                        className="text-gray-600 hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-red-500/10 flex-shrink-0"
-                        title="Sacar de la ruta"
+                        onClick={() => navigate(`/orders/${order.id}`)}
+                        className="text-gray-600 hover:text-brand-400 transition-colors p-1.5 rounded-lg hover:bg-navy-800"
+                        title="Ver detalle del pedido"
                       >
-                        <X size={14} />
+                        <Eye size={14} />
                       </button>
-                    )}
+                      {order.status !== 'DELIVERED' && selectedRoute.status !== 'CANCELLED' && (
+                        <button
+                          onClick={() => removeOrder(selectedRoute.id, order.id, order.customerName)}
+                          className="text-gray-600 hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-red-500/10 flex-shrink-0"
+                          title="Sacar de la ruta"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )
               })}
