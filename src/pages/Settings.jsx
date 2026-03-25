@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, useAuth } from '../lib/store'
-import { Settings as SettingsIcon, Store, MessageCircle, Link2, Check, AlertCircle, MapPin, Plus, Star, Trash2, Unplug, Map, Pencil, Loader2, DollarSign } from 'lucide-react'
+import { Settings as SettingsIcon, Store, MessageCircle, Link2, Check, AlertCircle, MapPin, Plus, Star, Trash2, Unplug, Map, Pencil, Loader2, DollarSign, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -83,20 +83,141 @@ const ZONE_BADGE = {
   'Lejana': 'bg-gray-500/20 text-gray-400',
 }
 
+function ZoneModal({ zone, onClose, onSaved }) {
+  const isNew = !zone
+  const [name, setName] = useState(zone?.name || '')
+  const [description, setDescription] = useState(zone?.description || '')
+  const [localities, setLocalities] = useState(zone?.localities || [])
+  const [localityInput, setLocalityInput] = useState('')
+  const [price, setPrice] = useState(String(zone?.tariffs?.[0]?.price || ''))
+  const [saving, setSaving] = useState(false)
+
+  const addLocality = () => {
+    const val = localityInput.trim()
+    if (val && !localities.includes(val)) {
+      setLocalities(prev => [...prev, val])
+    }
+    setLocalityInput('')
+  }
+
+  const removeLocality = (loc) => {
+    setLocalities(prev => prev.filter(l => l !== loc))
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      addLocality()
+    }
+  }
+
+  const handleSave = async () => {
+    if (!name.trim()) { toast.error('El nombre es obligatorio'); return }
+    setSaving(true)
+    try {
+      if (isNew) {
+        await api.post('/zones', { name: name.trim(), description: description.trim() || null, localities })
+        // Set price if provided
+        const zonesRes = await api.get('/zones')
+        const created = (zonesRes.data?.data || []).find(z => z.name === name.trim())
+        if (created && price) {
+          await api.put(`/zones/${created.id}`, { price: Number(price) })
+        }
+      } else {
+        await api.put(`/zones/${zone.id}`, {
+          name: name.trim(),
+          description: description.trim() || null,
+          localities,
+          price: Number(price) || 0
+        })
+      }
+      toast.success(isNew ? 'Zona creada' : 'Zona actualizada')
+      onSaved()
+      onClose()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al guardar zona')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="card-p w-full max-w-lg space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-white">{isNew ? 'Nueva zona' : `Editar ${zone.name}`}</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block">Nombre *</label>
+          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Interior" className="input w-full" />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block">Descripcion</label>
+          <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="Ej: Zona interior del pais" className="input w-full" />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block">Precio por envio *</label>
+          <div className="relative">
+            <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              type="number"
+              value={price}
+              onChange={e => setPrice(e.target.value)}
+              placeholder="0"
+              className="input w-full pl-8"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block">Localidades</label>
+          <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
+            {localities.map(loc => (
+              <span key={loc} className="inline-flex items-center gap-1 text-xs bg-navy-800 text-gray-300 px-2 py-1 rounded-lg border border-navy-700">
+                {loc}
+                <button onClick={() => removeLocality(loc)} className="text-gray-500 hover:text-red-400 ml-0.5"><X size={12} /></button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={localityInput}
+              onChange={e => setLocalityInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Escribi una localidad y presiona Enter"
+              className="input flex-1 text-sm"
+            />
+            <button onClick={addLocality} disabled={!localityInput.trim()} className="btn-secondary text-xs px-3">
+              <Plus size={14} /> Agregar
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-2 justify-end pt-2 border-t border-navy-800">
+          <button onClick={onClose} className="btn-secondary">Cancelar</button>
+          <button onClick={handleSave} disabled={saving || !name.trim()} className="btn-primary">
+            {saving ? <><Loader2 size={16} className="animate-spin" /> Guardando...</> : isNew ? 'Crear zona' : 'Guardar cambios'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ZonesSection() {
   const [zones, setZones] = useState([])
   const [loading, setLoading] = useState(true)
   const [seeding, setSeeding] = useState(false)
-  const [editingZone, setEditingZone] = useState(null)
-  const [editPrice, setEditPrice] = useState('')
-  const [editLocalities, setEditLocalities] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [modal, setModal] = useState(null) // null | 'new' | zone object
 
   const loadZones = () => {
     setLoading(true)
     api.get('/zones').then(r => {
-      const data = r.data?.data || []
-      setZones(data)
+      setZones(r.data?.data || [])
       setLoading(false)
     }).catch(() => { setZones([]); setLoading(false) })
   }
@@ -115,24 +236,15 @@ function ZonesSection() {
     setSeeding(false)
   }
 
-  const startEdit = (zone) => {
-    setEditingZone(zone.id)
-    setEditPrice(String(zone.tariffs?.[0]?.price || 0))
-    setEditLocalities((zone.localities || []).join(', '))
-  }
-
-  const saveEdit = async (zoneId) => {
-    setSaving(true)
+  const deleteZone = async (zone) => {
+    if (!window.confirm(`Eliminar la zona "${zone.name}"? Los pedidos asociados quedaran sin zona.`)) return
     try {
-      const localities = editLocalities.split(',').map(l => l.trim()).filter(Boolean)
-      await api.put(`/zones/${zoneId}`, { price: Number(editPrice), localities })
-      toast.success('Zona actualizada')
-      setEditingZone(null)
+      await api.delete(`/zones/${zone.id}`)
+      toast.success('Zona eliminada')
       loadZones()
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Error al guardar')
+      toast.error(err.response?.data?.error || 'Error al eliminar zona')
     }
-    setSaving(false)
   }
 
   return (
@@ -142,21 +254,25 @@ function ZonesSection() {
           <Map size={18} className="text-brand-400" />
           <h2 className="font-semibold text-white">Zonas y Tarifas</h2>
         </div>
-        {zones.length === 0 && !loading && (
-          <button onClick={seedZones} disabled={seeding} className="btn-primary text-xs">
-            {seeding ? <><Loader2 size={14} className="animate-spin" /> Creando...</> : <><Plus size={14} /> Cargar zonas por defecto</>}
+        <div className="flex gap-2">
+          {zones.length === 0 && !loading && (
+            <button onClick={seedZones} disabled={seeding} className="btn-secondary text-xs">
+              {seeding ? <><Loader2 size={14} className="animate-spin" /> Creando...</> : 'Cargar por defecto'}
+            </button>
+          )}
+          <button onClick={() => setModal('new')} className="btn-primary text-xs">
+            <Plus size={14} /> Nueva zona
           </button>
-        )}
+        </div>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-8 text-gray-500"><Loader2 size={20} className="animate-spin mr-2" /> Cargando zonas...</div>
       ) : zones.length === 0 ? (
-        <p className="text-sm text-gray-500 text-center py-4">No hay zonas configuradas. Hace click en "Cargar zonas por defecto" para comenzar.</p>
+        <p className="text-sm text-gray-500 text-center py-4">No hay zonas configuradas.</p>
       ) : (
         <div className="space-y-2">
           {zones.map(zone => {
-            const isEditing = editingZone === zone.id
             const price = zone.tariffs?.[0]?.price || 0
             const colorClass = ZONE_COLORS[zone.name] || 'border-navy-700 bg-navy-800/50'
             const badgeClass = ZONE_BADGE[zone.name] || 'bg-gray-500/20 text-gray-400'
@@ -168,59 +284,37 @@ function ZonesSection() {
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeClass}`}>{zone.name}</span>
                     {zone.description && <span className="text-xs text-gray-500">{zone.description}</span>}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-xs text-gray-500">{zone._count?.orders || 0} pedidos</span>
-                    {!isEditing && (
-                      <button onClick={() => startEdit(zone)} className="text-gray-500 hover:text-brand-400 transition-colors p-1">
-                        <Pencil size={14} />
-                      </button>
-                    )}
+                    <button onClick={() => setModal(zone)} className="text-gray-500 hover:text-brand-400 transition-colors p-1" title="Editar">
+                      <Pencil size={14} />
+                    </button>
+                    <button onClick={() => deleteZone(zone)} className="text-gray-500 hover:text-red-400 transition-colors p-1" title="Eliminar">
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
-
-                {isEditing ? (
-                  <div className="space-y-2 mt-2">
-                    <div className="flex items-center gap-2">
-                      <DollarSign size={14} className="text-gray-500" />
-                      <input
-                        type="number"
-                        value={editPrice}
-                        onChange={e => setEditPrice(e.target.value)}
-                        className="input text-sm py-1.5 px-2 w-32"
-                        placeholder="Precio por envio"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-gray-500 uppercase">Localidades (separadas por coma)</label>
-                      <textarea
-                        value={editLocalities}
-                        onChange={e => setEditLocalities(e.target.value)}
-                        className="input text-xs py-1.5 px-2 w-full mt-1 resize-none"
-                        rows={2}
-                      />
-                    </div>
-                    <div className="flex gap-2 justify-end">
-                      <button onClick={() => setEditingZone(null)} className="btn-secondary text-xs">Cancelar</button>
-                      <button onClick={() => saveEdit(zone.id)} disabled={saving} className="btn-primary text-xs">
-                        {saving ? 'Guardando...' : 'Guardar'}
-                      </button>
-                    </div>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-gray-500 truncate flex-1 mr-4">
+                    {(zone.localities || []).length > 0
+                      ? (zone.localities || []).slice(0, 8).join(', ') + ((zone.localities || []).length > 8 ? ` (+${zone.localities.length - 8} mas)` : '')
+                      : 'Sin localidades asignadas'
+                    }
                   </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-gray-500 truncate flex-1 mr-4">
-                      {(zone.localities || []).length > 0
-                        ? (zone.localities || []).join(', ')
-                        : 'Sin localidades asignadas'
-                      }
-                    </div>
-                    <span className="text-sm font-bold text-white whitespace-nowrap">${price.toLocaleString('es-AR')}/envio</span>
-                  </div>
-                )}
+                  <span className="text-sm font-bold text-white whitespace-nowrap">${price.toLocaleString('es-AR')}/envio</span>
+                </div>
               </div>
             )
           })}
         </div>
+      )}
+
+      {modal && (
+        <ZoneModal
+          zone={modal === 'new' ? null : modal}
+          onClose={() => setModal(null)}
+          onSaved={loadZones}
+        />
       )}
     </div>
   )
