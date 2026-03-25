@@ -1,31 +1,28 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { Package, Clock, Truck, CheckCircle2, Loader2, MapPin, User, Hash, AlertCircle, X } from 'lucide-react'
+import { Package, Clock, Truck, CheckCircle2, Loader2, MapPin, User, Hash, AlertCircle, X, Phone, Route } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
 const STEPS = [
-  { key: 'PENDING', label: 'Preparando', icon: Clock },
-  { key: 'ASSIGNED', label: 'Asignado', icon: Truck },
-  { key: 'IN_TRANSIT', label: 'En camino', icon: Truck },
-  { key: 'DELIVERED', label: 'Entregado', icon: CheckCircle2 },
+  { key: 'preparing', label: 'Preparando', icon: Clock },
+  { key: 'assigned', label: 'Asignado', icon: Package },
+  { key: 'in_route', label: 'En ruta', icon: Route },
+  { key: 'on_the_way', label: 'En camino', icon: Truck },
+  { key: 'delivered', label: 'Entregado', icon: CheckCircle2 },
 ]
 
-const STATUS_INDEX = { PENDING: 0, ASSIGNED: 1, PICKED_UP: 1, IN_TRANSIT: 2, ARRIVED: 2, DELIVERED: 3, FAILED: -1, CANCELLED: -1 }
-
-// Map event types to timeline step keys
-const EVENT_TO_STEP = {
-  CREATED: 'PENDING',
-  ASSIGNED: 'ASSIGNED',
-  PICKED_UP: 'ASSIGNED',
-  IN_TRANSIT: 'IN_TRANSIT',
-  ARRIVED: 'IN_TRANSIT',
-  DELIVERED: 'DELIVERED',
+const STATUS_TO_STEP = {
+  preparing: 0,
+  assigned: 1,
+  in_route: 2,
+  on_the_way: 3,
+  delivered: 4,
 }
 
-function formatEventTime(dateStr) {
+function formatTime(dateStr) {
   if (!dateStr) return ''
-  return new Date(dateStr).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs'
+  return new Date(dateStr).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
 }
 
 export default function TrackingPage() {
@@ -33,7 +30,6 @@ export default function TrackingPage() {
   const [order, setOrder] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [prevStatus, setPrevStatus] = useState(null)
   const [animating, setAnimating] = useState(false)
   const [rating, setRating] = useState(0)
   const [feedback, setFeedback] = useState('')
@@ -45,15 +41,19 @@ export default function TrackingPage() {
   const destMarker = useRef(null)
   const driverMarkerRef = useRef(null)
   const intervalRef = useRef(null)
+  const prevStatusRef = useRef(null)
 
   const fetchOrder = useCallback(async () => {
     try {
       const r = await fetch(`${API}/tracking/${trackingCode}`)
       if (!r.ok) throw new Error('not found')
-      const data = await r.json()
+      const json = await r.json()
+      const data = json.data || json
       setOrder(prev => {
-        if (prev && prev.status !== data.status) {
-          setPrevStatus(prev.status)
+        const prevTrackingStatus = prev?.trackingStatus
+        const newTrackingStatus = data.trackingStatus
+        if (prev && prevTrackingStatus !== newTrackingStatus) {
+          prevStatusRef.current = prevTrackingStatus
           setAnimating(true)
           setTimeout(() => setAnimating(false), 600)
         }
@@ -67,12 +67,11 @@ export default function TrackingPage() {
     }
   }, [trackingCode])
 
-  // Initial fetch
   useEffect(() => {
     if (trackingCode) fetchOrder()
   }, [trackingCode, fetchOrder])
 
-  // Auto-refresh every 30 seconds (lightweight, just fetches order data with events)
+  // Auto-refresh every 30 seconds
   useEffect(() => {
     if (!trackingCode || error) return
     intervalRef.current = setInterval(() => {
@@ -113,18 +112,16 @@ export default function TrackingPage() {
     }
   }, [order?.id])
 
-  // Update driver marker from last event with coordinates
+  // Update driver marker
   useEffect(() => {
     if (!mapInstance.current || !order) return
     const L = window.L
     if (!L) return
 
-    // Find the last event with lat/lng
     const events = order.events || []
     const lastLocEvent = [...events].reverse().find(e => e.lat && e.lng)
 
     if (!lastLocEvent) {
-      // Fallback to driverLat/driverLng if available
       if (!order.driverLat || !order.driverLng) return
       updateDriverMarker(L, order.driverLat, order.driverLng)
       return
@@ -135,8 +132,9 @@ export default function TrackingPage() {
 
   function updateDriverMarker(L, lat, lng) {
     if (!mapInstance.current) return
-    const isTransit = order?.status === 'IN_TRANSIT' || order?.status === 'ARRIVED'
-    if (!isTransit) return
+    const ts = order?.trackingStatus
+    const isMoving = ts === 'in_route' || ts === 'on_the_way'
+    if (!isMoving) return
 
     if (driverMarkerRef.current) {
       driverMarkerRef.current.setLatLng([lat, lng])
@@ -144,7 +142,7 @@ export default function TrackingPage() {
       driverMarkerRef.current = L.marker([lat, lng], {
         icon: L.divIcon({
           className: '',
-          html: '<div style="width:40px;height:40px;background:#0ea5e9;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 16px rgba(14,165,233,0.5)">\uD83C\uDFCD</div>',
+          html: '<div style="width:40px;height:40px;background:#0ea5e9;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 16px rgba(14,165,233,0.5)">\uD83D\uDE9A</div>',
           iconSize: [40, 40],
           iconAnchor: [20, 20]
         }),
@@ -152,7 +150,6 @@ export default function TrackingPage() {
       }).addTo(mapInstance.current)
     }
 
-    // Fit bounds to show both markers
     if (destMarker.current && driverMarkerRef.current) {
       const bounds = L.latLngBounds([
         driverMarkerRef.current.getLatLng(),
@@ -178,33 +175,55 @@ export default function TrackingPage() {
     setSubmittingRating(false)
   }
 
-  // Build event times map: step key -> time string
-  function getEventTimes() {
-    const events = order?.events || []
+  // Build step times from order timestamps
+  function getStepTimes() {
+    if (!order) return {}
     const times = {}
-    for (const ev of events) {
-      const stepKey = EVENT_TO_STEP[ev.type] || EVENT_TO_STEP[ev.status] || ev.type
-      if (stepKey && !times[stepKey]) {
-        times[stepKey] = formatEventTime(ev.createdAt || ev.timestamp)
-      }
-    }
-    // Fallback: use order-level timestamps
-    if (!times['PENDING'] && order?.createdAt) {
-      times['PENDING'] = formatEventTime(order.createdAt)
-    }
-    if (!times['ASSIGNED'] && order?.assignedAt) {
-      times['ASSIGNED'] = formatEventTime(order.assignedAt)
-    }
-    if (!times['IN_TRANSIT'] && order?.inTransitAt) {
-      times['IN_TRANSIT'] = formatEventTime(order.inTransitAt)
-    }
-    if (!times['DELIVERED'] && order?.deliveredAt) {
-      times['DELIVERED'] = formatEventTime(order.deliveredAt)
-    }
+    if (order.createdAt) times.preparing = formatTime(order.createdAt)
+    if (order.assignedAt) times.assigned = formatTime(order.assignedAt)
+    if (order.routeProgress?.startedAt) times.in_route = formatTime(order.routeProgress.startedAt)
+    if (order.inTransitAt) times.on_the_way = formatTime(order.inTransitAt)
+    if (order.deliveredAt) times.delivered = formatTime(order.deliveredAt)
     return times
   }
 
-  // Loading state
+  // Calculate ETA as 4-hour range
+  function getEtaRange() {
+    if (!order) return null
+    const ts = order.trackingStatus
+    if (ts === 'delivered') return null
+    if (ts === 'preparing') return null
+
+    const routeStartedAt = order.routeProgress?.startedAt
+    if (!routeStartedAt) return { pending: true }
+
+    // Use estimatedArrival from backend if available
+    if (order.estimatedArrival) {
+      const center = new Date(order.estimatedArrival)
+      const from = new Date(center.getTime() - 2 * 60 * 60 * 1000)
+      const to = new Date(center.getTime() + 2 * 60 * 60 * 1000)
+      return {
+        from: from.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+        to: to.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+      }
+    }
+
+    // Fallback: use route start time + position * 15 min as center
+    if (order.routeProgress?.position) {
+      const startTime = new Date(routeStartedAt)
+      const estimatedMinutes = order.routeProgress.position * 15
+      const center = new Date(startTime.getTime() + estimatedMinutes * 60 * 1000)
+      const from = new Date(center.getTime() - 2 * 60 * 60 * 1000)
+      const to = new Date(center.getTime() + 2 * 60 * 60 * 1000)
+      return {
+        from: from.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+        to: to.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+      }
+    }
+
+    return { pending: true }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-navy-950 flex items-center justify-center">
@@ -216,7 +235,6 @@ export default function TrackingPage() {
     )
   }
 
-  // Error state
   if (error) {
     return (
       <div className="min-h-screen bg-navy-950 flex items-center justify-center px-4">
@@ -229,44 +247,20 @@ export default function TrackingPage() {
     )
   }
 
-  const currentStep = STATUS_INDEX[order.status] ?? 0
-  const isTransit = order.status === 'IN_TRANSIT' || order.status === 'ARRIVED'
-  const isDelivered = order.status === 'DELIVERED'
+  const trackingStatus = order.trackingStatus || 'preparing'
+  const currentStep = STATUS_TO_STEP[trackingStatus] ?? 0
+  const isDelivered = trackingStatus === 'delivered'
+  const isMoving = trackingStatus === 'in_route' || trackingStatus === 'on_the_way'
   const isCancelled = order.status === 'CANCELLED' || order.status === 'FAILED'
-  const eventTimes = getEventTimes()
+  const stepTimes = getStepTimes()
+  const etaRange = getEtaRange()
 
-  // ETA calculations
-  const etaMinutes = order.estimatedMinutes || null
-  const etaBanner = etaMinutes && etaMinutes <= 60
-  const etaVeryClose = etaMinutes && etaMinutes <= 15
-
-  // ETA time range
-  const getEtaTimeRange = () => {
-    if (!etaMinutes) return null
-    const now = new Date()
-    const minTime = new Date(now.getTime() + Math.max(0, (etaMinutes - 10)) * 60000)
-    const maxTime = new Date(now.getTime() + (etaMinutes + 10) * 60000)
-    const fmt = (d) => d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-    return `${fmt(minTime)} y ${fmt(maxTime)}`
-  }
-
-  // Check if driver location is available from events
   const events = order.events || []
   const lastLocEvent = [...events].reverse().find(e => e.lat && e.lng)
-  const hasDriverLocation = isTransit && (lastLocEvent || (order.driverLat && order.driverLng))
+  const hasDriverLocation = isMoving && (lastLocEvent || (order.driverLat && order.driverLng))
 
   return (
     <div className="min-h-screen bg-navy-950 pb-8">
-      {/* ETA Banner */}
-      {isTransit && etaBanner && (
-        <div className={`px-4 py-3 text-center text-sm font-semibold ${etaVeryClose ? 'bg-emerald-600/20 text-emerald-300 border-b border-emerald-500/30' : 'bg-blue-600/20 text-blue-300 border-b border-blue-500/30'}`}>
-          {etaVeryClose
-            ? 'Tu repartidor esta muy cerca!'
-            : `Tu pedido llega en aproximadamente ${etaMinutes} minutos`
-          }
-        </div>
-      )}
-
       {/* Header */}
       <div className="bg-navy-900 border-b border-navy-800 px-4 py-4">
         <div className="max-w-lg mx-auto flex items-center gap-3">
@@ -274,7 +268,9 @@ export default function TrackingPage() {
             <Package size={18} className="text-brand-400" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-white">RutaEnvio</h1>
+            <h1 className="text-base font-bold text-white">
+              {order.business?.name || 'RutaEnvio'}
+            </h1>
             <p className="text-xs text-gray-500">Seguimiento de envio</p>
           </div>
         </div>
@@ -284,8 +280,7 @@ export default function TrackingPage() {
 
         {/* Status Hero */}
         <div className={`text-center px-6 py-8 transition-all duration-500 ${animating ? 'scale-105 opacity-90' : 'scale-100 opacity-100'}`}>
-          {/* PENDING */}
-          {order.status === 'PENDING' && (
+          {trackingStatus === 'preparing' && (
             <>
               <div className="w-20 h-20 rounded-full bg-yellow-500/15 flex items-center justify-center mx-auto mb-4">
                 <Clock size={40} className="text-yellow-400" />
@@ -295,41 +290,43 @@ export default function TrackingPage() {
             </>
           )}
 
-          {/* ASSIGNED / PICKED_UP */}
-          {(order.status === 'ASSIGNED' || order.status === 'PICKED_UP') && (
+          {trackingStatus === 'assigned' && (
             <>
               <div className="w-20 h-20 rounded-full bg-blue-500/15 flex items-center justify-center mx-auto mb-4">
-                <Truck size={40} className="text-blue-400" />
+                <Package size={40} className="text-blue-400" />
               </div>
               <h2 className="text-xl font-bold text-white mb-2">Tu pedido fue asignado a un repartidor</h2>
-              {order.driver?.name && (
-                <p className="text-sm text-gray-400">Repartidor: {order.driver.name}</p>
-              )}
+              <p className="text-sm text-gray-400">Pendiente de inicio de ruta</p>
             </>
           )}
 
-          {/* IN_TRANSIT / ARRIVED */}
-          {isTransit && (
+          {trackingStatus === 'in_route' && (
+            <>
+              <div className="w-20 h-20 rounded-full bg-sky-500/15 flex items-center justify-center mx-auto mb-4 animate-truck-bounce">
+                <Route size={40} className="text-sky-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-2">Tu repartidor ya esta en ruta</h2>
+              <p className="text-sm text-gray-400">
+                {order.routeProgress
+                  ? `Tiene ${order.routeProgress.position - order.routeProgress.delivered - 1} entregas antes de la tuya`
+                  : 'Tiene otras entregas antes de la tuya'
+                }
+              </p>
+            </>
+          )}
+
+          {trackingStatus === 'on_the_way' && (
             <>
               <div className="w-20 h-20 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto mb-4 animate-truck-bounce">
                 <Truck size={40} className="text-emerald-400" />
               </div>
               <h2 className="text-xl font-bold text-white mb-2">Tu pedido esta en camino!</h2>
-              {etaMinutes && (
-                <div className="mt-3">
-                  <p className="text-3xl font-bold text-emerald-400">{etaMinutes} min</p>
-                  <p className="text-sm text-gray-400 mt-1">
-                    Llega entre las {getEtaTimeRange()}
-                  </p>
-                </div>
-              )}
-              {!etaMinutes && order.driver?.name && (
-                <p className="text-sm text-gray-400">{order.driver.name} esta en camino con tu pedido</p>
-              )}
+              <p className="text-sm text-gray-400">
+                {order.driver?.name ? `${order.driver.name} se dirige a tu domicilio` : 'El repartidor se dirige a tu domicilio'}
+              </p>
             </>
           )}
 
-          {/* DELIVERED */}
           {isDelivered && (
             <>
               <div className="w-20 h-20 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto mb-4">
@@ -338,7 +335,7 @@ export default function TrackingPage() {
               <h2 className="text-xl font-bold text-white mb-2">Tu pedido fue entregado</h2>
               {order.deliveredAt && (
                 <p className="text-sm text-gray-400">
-                  {new Date(order.deliveredAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })} a las {new Date(order.deliveredAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(order.deliveredAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })} a las {formatTime(order.deliveredAt)}
                 </p>
               )}
               {order.receiverName && (
@@ -355,7 +352,6 @@ export default function TrackingPage() {
             </>
           )}
 
-          {/* CANCELLED / FAILED */}
           {isCancelled && (
             <>
               <div className="w-20 h-20 rounded-full bg-red-500/15 flex items-center justify-center mx-auto mb-4">
@@ -369,23 +365,42 @@ export default function TrackingPage() {
           )}
         </div>
 
-        {/* Timeline Progress Bar with event times */}
+        {/* ETA Range */}
+        {etaRange && !isCancelled && (
+          <div className="mx-4 mb-4 rounded-xl border border-navy-800 bg-navy-900 p-4 text-center">
+            {etaRange.pending ? (
+              <>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Tiempo estimado de llegada</p>
+                <p className="text-sm text-gray-400">Pendiente de inicio de ruta</p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Tiempo estimado de llegada</p>
+                <p className="text-lg font-bold text-white">
+                  Entre las {etaRange.from} y las {etaRange.to} hs
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Timeline */}
         {!isCancelled && (
           <div className="px-5 pb-6">
-            <div className="flex items-center justify-between relative">
+            <div className="flex items-start justify-between relative">
               {/* Background line */}
-              <div className="absolute top-4 left-4 right-4 h-0.5 bg-navy-800" />
+              <div className="absolute top-4 left-[10%] right-[10%] h-0.5 bg-navy-800" />
               {/* Active line */}
               <div
-                className="absolute top-4 left-4 h-0.5 bg-brand-400 transition-all duration-700 ease-out"
-                style={{ width: `${currentStep >= 0 ? (currentStep / (STEPS.length - 1)) * (100 - (100 / (STEPS.length))) : 0}%` }}
+                className="absolute top-4 left-[10%] h-0.5 bg-brand-400 transition-all duration-700 ease-out"
+                style={{ width: `${currentStep >= 0 ? (currentStep / (STEPS.length - 1)) * 80 : 0}%` }}
               />
 
               {STEPS.map((step, i) => {
                 const done = i <= currentStep && currentStep >= 0
                 const active = i === currentStep
                 const StepIcon = step.icon
-                const time = eventTimes[step.key]
+                const time = stepTimes[step.key]
                 return (
                   <div key={step.key} className="flex flex-col items-center relative z-10" style={{ flex: '1 1 0' }}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 ${
@@ -412,41 +427,77 @@ export default function TrackingPage() {
           </div>
         )}
 
-        {/* Map (IN_TRANSIT only, show if we have destination or driver location) */}
-        {isTransit && order.lat && order.lng && (
+        {/* Map */}
+        {isMoving && order.lat && order.lng && (
           <div className="mx-4 mb-4 rounded-xl overflow-hidden border border-navy-800" style={{ height: '200px' }}>
             <div ref={mapRef} className="w-full h-full" />
           </div>
         )}
 
         {/* Order Info */}
-        <div className="mx-4 mb-4 bg-navy-900 rounded-xl border border-navy-800 p-4 space-y-3">
+        <div className="mx-4 mb-4 bg-navy-900 rounded-xl border border-navy-800 p-4 space-y-3.5">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Datos del envio</h3>
+
+          <div className="flex items-start gap-3">
+            <MapPin size={15} className="text-gray-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[10px] text-gray-600 uppercase tracking-wider">Direccion de entrega</p>
+              <p className="text-sm text-white">
+                {order.address}
+                {order.addressDetail ? ` (${order.addressDetail})` : ''}
+              </p>
+              {order.city && (
+                <p className="text-xs text-gray-500">{order.city}{order.province ? `, ${order.province}` : ''}</p>
+              )}
+            </div>
+          </div>
+
+          {order.orderNumber && (
+            <div className="flex items-center gap-3">
+              <Hash size={15} className="text-gray-500 flex-shrink-0" />
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-wider">Numero de pedido</p>
+                <p className="text-sm text-white font-mono">#{order.orderNumber}</p>
+              </div>
+            </div>
+          )}
+
           {order.customerName && (
             <div className="flex items-center gap-3">
               <User size={15} className="text-gray-500 flex-shrink-0" />
               <div>
-                <p className="text-[10px] text-gray-600 uppercase tracking-wider">Cliente</p>
+                <p className="text-[10px] text-gray-600 uppercase tracking-wider">Destinatario</p>
                 <p className="text-sm text-white">{order.customerName}</p>
               </div>
             </div>
           )}
-          <div className="flex items-start gap-3">
-            <MapPin size={15} className="text-gray-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[10px] text-gray-600 uppercase tracking-wider">Direccion</p>
-              <p className="text-sm text-white">
-                {order.address}
-                {order.city ? `, ${order.city}` : ''}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Hash size={15} className="text-gray-500 flex-shrink-0" />
-            <div>
-              <p className="text-[10px] text-gray-600 uppercase tracking-wider">Numero de pedido</p>
-              <p className="text-sm text-white font-mono">{order.orderNumber}</p>
-            </div>
-          </div>
+
+          {order.driver?.name && (
+            <>
+              <div className="border-t border-navy-800 pt-3.5 flex items-center gap-3">
+                <Truck size={15} className="text-gray-500 flex-shrink-0" />
+                <div>
+                  <p className="text-[10px] text-gray-600 uppercase tracking-wider">Repartidor</p>
+                  <p className="text-sm text-white">{order.driver.name}</p>
+                </div>
+              </div>
+
+              {order.driver.phone && !isDelivered && (
+                <div className="flex items-center gap-3">
+                  <Phone size={15} className="text-gray-500 flex-shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-gray-600 uppercase tracking-wider">Telefono del repartidor</p>
+                    <a
+                      href={`tel:${order.driver.phone}`}
+                      className="text-sm text-brand-400 hover:text-brand-300 transition-colors"
+                    >
+                      {order.driver.phone}
+                    </a>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Rating (after delivery) */}
