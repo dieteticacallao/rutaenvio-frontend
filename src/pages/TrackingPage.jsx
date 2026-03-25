@@ -80,84 +80,125 @@ export default function TrackingPage() {
     return () => clearInterval(intervalRef.current)
   }, [trackingCode, error, fetchOrder])
 
-  // Initialize map
+  const routeLineRef = useRef(null)
+
+  // Determine if map should show
+  const shouldShowMap = useCallback(() => {
+    if (!order || !order.lat || !order.lng) return false
+    const ts = order.trackingStatus
+    return ts === 'in_route' || ts === 'on_the_way' || ts === 'delivered'
+  }, [order])
+
+  // Get driver location: lastDeliveredLocation or originCoords
+  const getDriverCoords = useCallback(() => {
+    if (!order) return null
+    if (order.lastDeliveredLocation?.lat && order.lastDeliveredLocation?.lng) {
+      return order.lastDeliveredLocation
+    }
+    if (order.originCoords?.lat && order.originCoords?.lng) {
+      return order.originCoords
+    }
+    return null
+  }, [order])
+
+  // Initialize or update map
   useEffect(() => {
-    if (!order || !mapRef.current || mapInstance.current) return
+    if (!order || !mapRef.current) return
+    if (!shouldShowMap()) return
     const L = window.L
     if (!L) return
-    if (!order.lat || !order.lng) return
 
-    mapInstance.current = L.map(mapRef.current, {
-      center: [order.lat, order.lng],
-      zoom: 15,
-      zoomControl: false,
-      attributionControl: false,
-      dragging: true,
-      scrollWheelZoom: false
-    })
+    const destLat = order.lat
+    const destLng = order.lng
+    const ts = order.trackingStatus
+    const driverCoords = getDriverCoords()
 
-    L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(mapInstance.current)
-
-    destMarker.current = L.marker([order.lat, order.lng], {
-      icon: L.divIcon({
-        className: '',
-        html: '<div style="width:36px;height:36px;background:#3b82f6;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(59,130,246,0.4)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></div>',
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
+    // Create map if not exists
+    if (!mapInstance.current) {
+      mapInstance.current = L.map(mapRef.current, {
+        center: [destLat, destLng],
+        zoom: 14,
+        zoomControl: false,
+        attributionControl: false,
+        dragging: true,
+        scrollWheelZoom: false
       })
-    }).addTo(mapInstance.current)
+      L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(mapInstance.current)
+    }
 
+    // Destination marker
+    const destIcon = ts === 'delivered'
+      ? L.divIcon({
+          className: '',
+          html: '<div style="width:36px;height:36px;background:#10b981;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(16,185,129,0.4)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>',
+          iconSize: [36, 36], iconAnchor: [18, 18]
+        })
+      : L.divIcon({
+          className: '',
+          html: '<div style="width:36px;height:36px;background:#3b82f6;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(59,130,246,0.4)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></div>',
+          iconSize: [36, 36], iconAnchor: [18, 18]
+        })
+
+    if (destMarker.current) {
+      destMarker.current.setLatLng([destLat, destLng])
+      destMarker.current.setIcon(destIcon)
+    } else {
+      destMarker.current = L.marker([destLat, destLng], { icon: destIcon }).addTo(mapInstance.current)
+    }
+
+    // Driver marker (only for in_route / on_the_way)
+    if ((ts === 'in_route' || ts === 'on_the_way') && driverCoords) {
+      const driverIcon = L.divIcon({
+        className: '',
+        html: '<div style="width:40px;height:40px;background:#0ea5e9;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 16px rgba(14,165,233,0.5)">\uD83D\uDEF5</div>',
+        iconSize: [40, 40], iconAnchor: [20, 20]
+      })
+
+      if (driverMarkerRef.current) {
+        driverMarkerRef.current.setLatLng([driverCoords.lat, driverCoords.lng])
+      } else {
+        driverMarkerRef.current = L.marker([driverCoords.lat, driverCoords.lng], {
+          icon: driverIcon, zIndexOffset: 1000
+        }).addTo(mapInstance.current)
+      }
+
+      // Dashed line between driver and destination
+      if (routeLineRef.current) {
+        mapInstance.current.removeLayer(routeLineRef.current)
+      }
+      routeLineRef.current = L.polyline(
+        [[driverCoords.lat, driverCoords.lng], [destLat, destLng]],
+        { color: '#0ea5e9', weight: 3, opacity: 0.7, dashArray: '8 6' }
+      ).addTo(mapInstance.current)
+
+      // Fit bounds to show both markers
+      const bounds = L.latLngBounds([
+        [driverCoords.lat, driverCoords.lng],
+        [destLat, destLng]
+      ])
+      mapInstance.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 })
+    } else {
+      // Remove driver marker and line if delivered or no driver coords
+      if (driverMarkerRef.current) {
+        mapInstance.current.removeLayer(driverMarkerRef.current)
+        driverMarkerRef.current = null
+      }
+      if (routeLineRef.current) {
+        mapInstance.current.removeLayer(routeLineRef.current)
+        routeLineRef.current = null
+      }
+      mapInstance.current.setView([destLat, destLng], 15)
+    }
+
+    return () => {}
+  }, [order?.trackingStatus, order?.lastDeliveredLocation, order?.originCoords, order?.lat, order?.lng])
+
+  // Cleanup map on unmount
+  useEffect(() => {
     return () => {
       if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null }
     }
-  }, [order?.id])
-
-  // Update driver marker
-  useEffect(() => {
-    if (!mapInstance.current || !order) return
-    const L = window.L
-    if (!L) return
-
-    const events = order.events || []
-    const lastLocEvent = [...events].reverse().find(e => e.lat && e.lng)
-
-    if (!lastLocEvent) {
-      if (!order.driverLat || !order.driverLng) return
-      updateDriverMarker(L, order.driverLat, order.driverLng)
-      return
-    }
-
-    updateDriverMarker(L, lastLocEvent.lat, lastLocEvent.lng)
-  }, [order?.events, order?.driverLat, order?.driverLng])
-
-  function updateDriverMarker(L, lat, lng) {
-    if (!mapInstance.current) return
-    const ts = order?.trackingStatus
-    const isMoving = ts === 'in_route' || ts === 'on_the_way'
-    if (!isMoving) return
-
-    if (driverMarkerRef.current) {
-      driverMarkerRef.current.setLatLng([lat, lng])
-    } else {
-      driverMarkerRef.current = L.marker([lat, lng], {
-        icon: L.divIcon({
-          className: '',
-          html: '<div style="width:40px;height:40px;background:#0ea5e9;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 16px rgba(14,165,233,0.5)">\uD83D\uDE9A</div>',
-          iconSize: [40, 40],
-          iconAnchor: [20, 20]
-        }),
-        zIndexOffset: 1000
-      }).addTo(mapInstance.current)
-    }
-
-    if (destMarker.current && driverMarkerRef.current) {
-      const bounds = L.latLngBounds([
-        driverMarkerRef.current.getLatLng(),
-        destMarker.current.getLatLng()
-      ])
-      mapInstance.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 })
-    }
-  }
+  }, [])
 
   const submitRating = async () => {
     if (!rating) return
@@ -260,9 +301,7 @@ export default function TrackingPage() {
   const stepTimes = getStepTimes()
   const etaRange = getEtaRange()
 
-  const events = order.events || []
-  const lastLocEvent = [...events].reverse().find(e => e.lat && e.lng)
-  const hasDriverLocation = isMoving && (lastLocEvent || (order.driverLat && order.driverLng))
+  const showMap = shouldShowMap()
 
   return (
     <div className="min-h-screen bg-navy-950 pb-8">
@@ -380,6 +419,13 @@ export default function TrackingPage() {
           )}
         </div>
 
+        {/* Map - shown for in_route, on_the_way, delivered */}
+        {showMap && (
+          <div className="mx-4 mb-4 rounded-xl overflow-hidden border border-navy-800" style={{ height: '220px' }}>
+            <div ref={mapRef} className="w-full h-full" />
+          </div>
+        )}
+
         {/* ETA Range */}
         {etaRange && !isCancelled && !isRescheduled && (
           <div className="mx-4 mb-4 rounded-xl border border-navy-800 bg-navy-900 p-4 text-center">
@@ -444,13 +490,6 @@ export default function TrackingPage() {
                 )
               })}
             </div>
-          </div>
-        )}
-
-        {/* Map */}
-        {isMoving && order.lat && order.lng && (
-          <div className="mx-4 mb-4 rounded-xl overflow-hidden border border-navy-800" style={{ height: '200px' }}>
-            <div ref={mapRef} className="w-full h-full" />
           </div>
         )}
 
