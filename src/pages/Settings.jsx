@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, useAuth } from '../lib/store'
-import { Settings as SettingsIcon, Store, MessageCircle, Link2, Check, AlertCircle, MapPin, Plus, Star, Trash2, Unplug, Map, Pencil, Loader2, DollarSign, X } from 'lucide-react'
+import { Settings as SettingsIcon, Store, MessageCircle, Link2, Check, AlertCircle, MapPin, Plus, Star, Trash2, Unplug, Map, Pencil, Loader2, DollarSign, X, ShoppingBag } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -20,6 +20,11 @@ export default function Settings() {
       searchParams.delete('tn')
       setSearchParams(searchParams, { replace: true })
       api.get('/dashboard/settings').then(r => setSettings(r.data))
+    }
+    if (searchParams.get('ml') === 'connected') {
+      toast.success('MercadoLibre conectado correctamente')
+      searchParams.delete('ml')
+      setSearchParams(searchParams, { replace: true })
     }
   }, [searchParams, setSearchParams])
 
@@ -60,6 +65,9 @@ export default function Settings() {
 
       {/* Tiendanube integration */}
       <TiendanubeSection settings={settings} onSettingsUpdate={() => api.get('/dashboard/settings').then(r => setSettings(r.data))} />
+
+      {/* MercadoLibre integration */}
+      <MercadoLibreSection />
 
       {/* WhatsApp integration */}
       <WhatsAppSection connected={settings?.integrations?.whatsapp} />
@@ -522,6 +530,82 @@ function TiendanubeSection({ settings, onSettingsUpdate }) {
           <button onClick={handleConnect} className="btn-secondary">Conectar Tiendanube</button>
         </>
       )}
+    </div>
+  )
+}
+
+function MercadoLibreSection() {
+  const [status, setStatus] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [disconnecting, setDisconnecting] = useState(false)
+
+  const loadStatus = () => {
+    setLoading(true)
+    api.get('/mercadolibre/status')
+      .then(r => { setStatus(r.data || {}); setLoading(false) })
+      .catch(() => { setStatus({ connected: false }); setLoading(false) })
+  }
+
+  useEffect(() => { loadStatus() }, [])
+
+  const handleConnect = () => {
+    const apiUrl = (import.meta.env.VITE_API_URL || '/api').replace('/api', '')
+    const token = localStorage.getItem('token')
+    window.location.href = apiUrl + '/api/mercadolibre/auth?token=' + token
+  }
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true)
+    try {
+      await api.delete('/mercadolibre/disconnect')
+      toast.success('MercadoLibre desconectado')
+      loadStatus()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al desconectar')
+    }
+    setDisconnecting(false)
+  }
+
+  const connected = status?.connected
+
+  return (
+    <div className="card-p space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-white flex items-center gap-2">
+          <ShoppingBag size={18} className="text-yellow-400" /> MercadoLibre
+        </h3>
+        {loading ? (
+          <Loader2 size={16} className="animate-spin text-gray-500" />
+        ) : connected ? (
+          <span className="badge bg-emerald-500/10 text-emerald-400"><Check size={12} /> Conectado</span>
+        ) : (
+          <span className="badge bg-amber-500/10 text-amber-400"><AlertCircle size={12} /> No conectado</span>
+        )}
+      </div>
+
+      {!loading && connected ? (
+        <>
+          <p className="text-sm text-gray-500">
+            Cuenta conectada: <span className="text-white font-medium">{status?.nickname || 'MercadoLibre'}</span>. Importa pedidos desde el boton Importar en Pedidos.
+          </p>
+          <button onClick={handleDisconnect} disabled={disconnecting} className="btn-secondary text-red-400 hover:text-red-300">
+            <Unplug size={16} /> {disconnecting ? 'Desconectando...' : 'Desconectar'}
+          </button>
+        </>
+      ) : !loading ? (
+        <>
+          <p className="text-sm text-gray-500">
+            Conecta tu cuenta de MercadoLibre para importar pedidos de Flex.
+          </p>
+          <button
+            onClick={handleConnect}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-colors"
+            style={{ backgroundColor: '#FFE600', color: '#000' }}
+          >
+            <ShoppingBag size={16} /> Conectar MercadoLibre
+          </button>
+        </>
+      ) : null}
     </div>
   )
 }
