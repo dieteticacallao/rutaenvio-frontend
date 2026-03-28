@@ -695,24 +695,14 @@ function toLocalDate(date) {
 }
 
 function MLImportModal({ onClose, onImported }) {
-  const today = toLocalDate(new Date())
   const [mlOrders, setMlOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(new Set())
   const [importing, setImporting] = useState(false)
-  const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
 
-  const fetchMLOrders = useCallback((from, to) => {
-    setLoading(true)
-    setError(null)
-    setSelected(new Set())
-    const params = {}
-    if (from) params.dateFrom = from
-    if (to) params.dateTo = to
-    api.get('/mercadolibre/orders', { params })
+  useEffect(() => {
+    api.get('/mercadolibre/orders')
       .then(r => {
         const d = r.data
         const list = Array.isArray(d) ? d
@@ -728,15 +718,6 @@ function MLImportModal({ onClose, onImported }) {
         setLoading(false)
       })
   }, [])
-
-  useEffect(() => {
-    fetchMLOrders(dateFrom, dateTo)
-  }, [dateFrom, dateTo, fetchMLOrders])
-
-  const setQuickDate = (from, to) => {
-    setDateFrom(from)
-    setDateTo(to)
-  }
 
   const toggleSelect = (id) => {
     setSelected(prev => {
@@ -778,77 +759,19 @@ function MLImportModal({ onClose, onImported }) {
     setImporting(false)
   }
 
-  const yesterday = toLocalDate(new Date(Date.now() - 86400000))
-  const weekStart = (() => {
-    const now = new Date()
-    const day = now.getDay()
-    const diff = day === 0 ? 6 : day - 1
-    const mon = new Date(now)
-    mon.setDate(now.getDate() - diff)
-    return toLocalDate(mon)
-  })()
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div onClick={e => e.stopPropagation()} className="card-p w-full max-w-4xl space-y-4 max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <ShoppingBag size={20} className="text-yellow-400" />
-            Importar pedidos de MercadoLibre
-          </h2>
+          <div>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <ShoppingBag size={20} className="text-yellow-400" />
+              Importar pedidos de MercadoLibre
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">Pedidos Flex pendientes de envio</p>
+          </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
         </div>
-
-        {/* Date filters */}
-        {!result && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => setQuickDate('', '')}
-                className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
-                  !dateFrom && !dateTo
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-navy-800 text-gray-400 hover:text-white hover:bg-navy-700'
-                }`}
-              >
-                Todos
-              </button>
-              {[
-                { label: 'Hoy', from: today, to: today },
-                { label: 'Ayer', from: yesterday, to: yesterday },
-                { label: 'Esta semana', from: weekStart, to: today },
-              ].map(btn => (
-                <button
-                  key={btn.label}
-                  onClick={() => setQuickDate(btn.from, btn.to)}
-                  className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
-                    dateFrom === btn.from && dateTo === btn.to && btn.from
-                      ? 'bg-brand-500 text-white'
-                      : 'bg-navy-800 text-gray-400 hover:text-white hover:bg-navy-700'
-                  }`}
-                >
-                  {btn.label}
-                </button>
-              ))}
-              <div className="flex items-center gap-1.5 ml-auto">
-                <label className="text-xs text-gray-500">Desde</label>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={e => { if (e.target.value) setDateFrom(e.target.value) }}
-                  className="input text-xs py-1.5 px-2 cursor-pointer [color-scheme:dark]"
-                />
-                <label className="text-xs text-gray-500">Hasta</label>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={e => { if (e.target.value) setDateTo(e.target.value) }}
-                  className="input text-xs py-1.5 px-2 cursor-pointer [color-scheme:dark]"
-                />
-              </div>
-            </div>
-          </div>
-        )}
 
         {loading ? (
           <div className="flex items-center justify-center py-12 text-gray-500">
@@ -859,21 +782,9 @@ function MLImportModal({ onClose, onImported }) {
             <AlertCircle size={20} />
             <span className="text-sm">{error}</span>
           </div>
-        ) : result ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-emerald-400">
-              <CheckCircle2 size={20} />
-              <span className="text-sm font-medium">
-                Se importaron {result.imported} pedidos. {result.errors || 0} errores.
-              </span>
-            </div>
-            <div className="flex justify-end">
-              <button onClick={onClose} className="btn-primary">Cerrar</button>
-            </div>
-          </div>
         ) : mlOrders.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            <p className="text-sm">No hay pedidos de MercadoLibre en el rango seleccionado.</p>
+            <p className="text-sm">No hay pedidos Flex pendientes de envio.</p>
             <button onClick={onClose} className="btn-secondary mt-4">Cerrar</button>
           </div>
         ) : (
