@@ -702,8 +702,8 @@ function MLImportModal({ onClose, onImported }) {
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
-  const [dateFrom, setDateFrom] = useState(today)
-  const [dateTo, setDateTo] = useState(today)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   const fetchMLOrders = useCallback((from, to) => {
     setLoading(true)
@@ -724,7 +724,7 @@ function MLImportModal({ onClose, onImported }) {
       })
       .catch(err => {
         setMlOrders([])
-        setError(err.response?.data?.error || 'Error al obtener pedidos de MercadoLibre')
+        setError(err.response?.data?.error || err.response?.data?.message || 'Error al obtener pedidos de MercadoLibre')
         setLoading(false)
       })
   }, [])
@@ -810,6 +810,16 @@ function MLImportModal({ onClose, onImported }) {
         {!result && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setQuickDate('', '')}
+                className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
+                  !dateFrom && !dateTo
+                    ? 'bg-brand-500 text-white'
+                    : 'bg-navy-800 text-gray-400 hover:text-white hover:bg-navy-700'
+                }`}
+              >
+                Todos
+              </button>
               {[
                 { label: 'Hoy', from: today, to: today },
                 { label: 'Ayer', from: yesterday, to: yesterday },
@@ -819,7 +829,7 @@ function MLImportModal({ onClose, onImported }) {
                   key={btn.label}
                   onClick={() => setQuickDate(btn.from, btn.to)}
                   className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
-                    dateFrom === btn.from && dateTo === btn.to
+                    dateFrom === btn.from && dateTo === btn.to && btn.from
                       ? 'bg-brand-500 text-white'
                       : 'bg-navy-800 text-gray-400 hover:text-white hover:bg-navy-700'
                   }`}
