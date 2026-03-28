@@ -393,7 +393,8 @@ export default function Orders() {
             <tr className="border-b border-navy-800 text-xs text-gray-500 uppercase tracking-wider">
               <th className="text-left p-3 pl-4">Pedido</th>
               <th className="text-left p-3">Cliente</th>
-              <th className="text-left p-3">Dirección</th>
+              <th className="text-left p-3">Direccion</th>
+              <th className="text-left p-3">Fecha</th>
               <th className="text-left p-3">Estado</th>
               <th className="text-left p-3">Cadete</th>
               <th className="text-right p-3 pr-4">Acciones</th>
@@ -401,9 +402,9 @@ export default function Orders() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-500"><Loader2 size={24} className="animate-spin inline-block mr-2" />Cargando pedidos...</td></tr>
+              <tr><td colSpan={7} className="p-8 text-center text-gray-500"><Loader2 size={24} className="animate-spin inline-block mr-2" />Cargando pedidos...</td></tr>
             ) : filteredOrders.length === 0 ? (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-500">{orders.length === 0 ? 'No hay pedidos. Importa de Tiendanube o crea uno manual.' : 'No se encontraron pedidos con esos filtros.'}</td></tr>
+              <tr><td colSpan={7} className="p-8 text-center text-gray-500">{orders.length === 0 ? 'No hay pedidos. Importa de Tiendanube o crea uno manual.' : 'No se encontraron pedidos con esos filtros.'}</td></tr>
             ) : filteredOrders.map(order => (
               <tr key={order.id} className="table-row">
                 <td className="p-3 pl-4">
@@ -422,9 +423,10 @@ export default function Orders() {
                 <td className="p-3">
                   <div className="text-gray-300 max-w-[200px] truncate">{order.address}</div>
                   <div className="text-xs text-gray-500 flex items-center gap-1">
-                    {order.lat ? <><MapPin size={10} className="text-emerald-400" /> Geocodificado</> : <><MapPin size={10} className="text-amber-400" /> Sin ubicación</>}
+                    {order.lat ? <><MapPin size={10} className="text-emerald-400" /> Geocodificado</> : <><MapPin size={10} className="text-amber-400" /> Sin ubicacion</>}
                   </div>
                 </td>
+                <td className="p-3 text-gray-400 text-xs whitespace-nowrap">{order.createdAt ? new Date(order.createdAt).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }) : '\u2014'}</td>
                 <td className="p-3">
                   <span className={STATUS_MAP[order.status]?.color || 'badge'}>
                     {STATUS_MAP[order.status]?.label || order.status}
