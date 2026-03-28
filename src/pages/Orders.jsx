@@ -697,14 +697,24 @@ function toLocalDate(date) {
 }
 
 function MLImportModal({ onClose, onImported }) {
+  const today = toLocalDate(new Date())
+  const threeDaysAgo = toLocalDate(new Date(Date.now() - 3 * 86400000))
   const [mlOrders, setMlOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(new Set())
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState(null)
+  const [dateFrom, setDateFrom] = useState(threeDaysAgo)
+  const [dateTo, setDateTo] = useState(today)
 
-  useEffect(() => {
-    api.get('/mercadolibre/orders')
+  const fetchMLOrders = useCallback((from, to) => {
+    setLoading(true)
+    setError(null)
+    setSelected(new Set())
+    const params = {}
+    if (from) params.dateFrom = from
+    if (to) params.dateTo = to
+    api.get('/mercadolibre/orders', { params })
       .then(r => {
         const d = r.data
         const list = Array.isArray(d) ? d
@@ -720,6 +730,18 @@ function MLImportModal({ onClose, onImported }) {
         setLoading(false)
       })
   }, [])
+
+  useEffect(() => {
+    fetchMLOrders(dateFrom, dateTo)
+  }, [dateFrom, dateTo, fetchMLOrders])
+
+  const setQuickDate = (from, to) => {
+    setDateFrom(from)
+    setDateTo(to)
+  }
+
+  const yesterday = toLocalDate(new Date(Date.now() - 86400000))
+  const sevenDaysAgo = toLocalDate(new Date(Date.now() - 7 * 86400000))
 
   const toggleSelect = (id) => {
     setSelected(prev => {
@@ -773,6 +795,43 @@ function MLImportModal({ onClose, onImported }) {
             <p className="text-sm text-gray-500 mt-1">Pedidos Flex pendientes de envio</p>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {[
+            { label: 'Hoy', from: today, to: today },
+            { label: 'Ayer', from: yesterday, to: yesterday },
+            { label: '3 dias', from: threeDaysAgo, to: today },
+            { label: '7 dias', from: sevenDaysAgo, to: today },
+          ].map(btn => (
+            <button
+              key={btn.label}
+              onClick={() => setQuickDate(btn.from, btn.to)}
+              className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
+                dateFrom === btn.from && dateTo === btn.to
+                  ? 'bg-brand-500 text-white'
+                  : 'bg-navy-800 text-gray-400 hover:text-white hover:bg-navy-700'
+              }`}
+            >
+              {btn.label}
+            </button>
+          ))}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <label className="text-xs text-gray-500">Desde</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => { if (e.target.value) setDateFrom(e.target.value) }}
+              className="input text-xs py-1.5 px-2 cursor-pointer [color-scheme:dark]"
+            />
+            <label className="text-xs text-gray-500">Hasta</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => { if (e.target.value) setDateTo(e.target.value) }}
+              className="input text-xs py-1.5 px-2 cursor-pointer [color-scheme:dark]"
+            />
+          </div>
         </div>
 
         {loading ? (
