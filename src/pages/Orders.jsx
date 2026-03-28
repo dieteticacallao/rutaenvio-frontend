@@ -778,7 +778,33 @@ function MLImportModal({ onClose, onImported }) {
                 <ShoppingBag size={14} /> ML
               </span>
             </h2>
-            <p className="text-sm text-gray-500 mt-1">Pedidos Flex pendientes de envio</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-sm text-gray-500">Pedidos Flex pendientes de envio</p>
+              <button
+                onClick={() => {
+                  setLoading(true)
+                  setError(null)
+                  setSelected(new Set())
+                  api.post('/mercadolibre/orders/refresh')
+                    .then(r => {
+                      const d = r.data
+                      const list = Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.orders) ? d.orders : []
+                      setMlOrders(list)
+                      setLoading(false)
+                    })
+                    .catch(err => {
+                      setMlOrders([])
+                      setError(err.response?.data?.error || 'Error al refrescar pedidos')
+                      setLoading(false)
+                    })
+                }}
+                disabled={loading}
+                className="text-gray-500 hover:text-white transition-colors p-0.5"
+                title="Refrescar desde MercadoLibre"
+              >
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              </button>
+            </div>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
         </div>
