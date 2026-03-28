@@ -924,7 +924,7 @@ function MLImportModal({ onClose, onImported }) {
                         </td>
                         <td className="p-2 font-mono text-xs">
                           <span className={imported ? 'text-gray-500' : 'text-white'}>#{order.packId || order.id}</span>
-                          {imported && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-500 border border-gray-500/20">Ya importado</span>}
+                          {imported && <span className="ml-1 text-gray-600 text-[9px]">(importado)</span>}
                         </td>
                         <td className="p-2 text-gray-300 truncate max-w-[140px]">{order.customerName || '\u2014'}</td>
                         <td className="p-2 text-gray-400 truncate max-w-[120px] text-xs">{order.buyerNickname || order.buyer?.nickname || '\u2014'}</td>
@@ -1152,13 +1152,12 @@ function TNImportModal({ onClose, onImported }) {
                         className="rounded border-navy-700 bg-navy-900 text-brand-500"
                       />
                     </th>
-                    <th className="p-2 text-left">ID TN</th>
-                    <th className="p-2 text-left">Producto(s)</th>
+                    <th className="p-2 text-left">Pedido</th>
                     <th className="p-2 text-left">Cliente</th>
                     <th className="p-2 text-left">Direccion</th>
                     <th className="p-2 text-left">Ciudad</th>
-                    <th className="p-2 text-left">Fecha</th>
-                    <th className="p-2 pr-3 text-left">Estado</th>
+                    <th className="p-2 text-left">Envio</th>
+                    <th className="p-2 pr-3 text-left">Fecha</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-navy-800/50">
@@ -1183,14 +1182,13 @@ function TNImportModal({ onClose, onImported }) {
                         </td>
                         <td className="p-2 font-mono text-xs">
                           <span className={imported ? 'text-gray-500' : 'text-white'}>#{order.number || order.orderNumber || order.id}</span>
-                          {imported && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-500 border border-gray-500/20">Ya importado</span>}
+                          {imported && <span className="ml-1 text-gray-600 text-[9px]">(importado)</span>}
                         </td>
-                        <td className="p-2 text-gray-300 truncate max-w-[140px]">{order.products || order.items || '\u2014'}</td>
                         <td className="p-2 text-gray-300 truncate max-w-[140px]">{order.customerName || order.customer?.name || order.contact_name || 'Sin nombre'}</td>
                         <td className="p-2 text-gray-400 truncate max-w-[180px]">{order.address || order.shipping_address?.address || order.shipping_address?.street || '\u2014'}</td>
                         <td className="p-2 text-gray-400 truncate max-w-[100px]">{order.city || order.shipping_address?.city || '\u2014'}</td>
-                        <td className="p-2 text-gray-400 text-xs whitespace-nowrap">{order.createdAt || order.created_at ? new Date(order.createdAt || order.created_at).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }) : '\u2014'}</td>
-                        <td className="p-2 pr-3 text-gray-400 truncate max-w-[120px] text-xs">{order.status || order.payment_status || '\u2014'}</td>
+                        <td className="p-2 text-gray-400 truncate max-w-[120px] text-xs">{order.shippingMethod || order.shipping_option || order.shipping || '\u2014'}</td>
+                        <td className="p-2 pr-3 text-gray-400 text-xs whitespace-nowrap">{order.createdAt || order.created_at ? new Date(order.createdAt || order.created_at).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }) : '\u2014'}</td>
                       </tr>
                     )
                   })}
