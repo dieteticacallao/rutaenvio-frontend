@@ -1028,7 +1028,7 @@ function TNImportModal({ onClose, onImported }) {
       <div onClick={e => e.stopPropagation()} className="card-p w-full max-w-4xl space-y-4 max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-white">Importar pedidos de Tiendanube</h2>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2"><Cloud size={20} className="text-purple-400" /> Importar pedidos de Tiendanube</h2>
             <p className="text-sm text-gray-500 mt-1">Pedidos con envio RutaEnvio pendientes</p>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
