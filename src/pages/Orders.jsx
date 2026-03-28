@@ -808,7 +808,6 @@ function MLImportModal({ onClose, onImported }) {
                         className="rounded border-navy-700 bg-navy-900 text-brand-500"
                       />
                     </th>
-                    <th className="p-2 text-left">ID ML</th>
                     <th className="p-2 text-left">Cliente</th>
                     <th className="p-2 text-left">Usuario ML</th>
                     <th className="p-2 text-left">Direccion</th>
@@ -819,6 +818,8 @@ function MLImportModal({ onClose, onImported }) {
                 <tbody className="divide-y divide-navy-800/50">
                   {mlOrders.map(order => {
                     const imported = order.alreadyImported
+                    const dateRaw = order.dateCreated || order.createdAt || order.date_created
+                    const dateStr = dateRaw ? new Date(dateRaw).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }) : '\u2014'
                     return (
                       <tr
                         key={order.id}
@@ -836,17 +837,16 @@ function MLImportModal({ onClose, onImported }) {
                             className="rounded border-navy-700 bg-navy-900 text-brand-500 disabled:opacity-30"
                           />
                         </td>
-                        <td className="p-2 font-mono text-xs">
+                        <td className="p-2 text-gray-300 truncate max-w-[160px]">
                           <span className="inline-flex items-center gap-1">
-                            <span className={imported ? 'text-gray-500' : 'text-white'}>#{order.packId || order.id}</span>
-                            {imported && <Check size={12} className="text-emerald-500" />}
+                            {order.customerName || '\u2014'}
+                            {imported && <Check size={12} className="text-emerald-500 shrink-0" />}
                           </span>
                         </td>
-                        <td className="p-2 text-gray-300 truncate max-w-[140px]">{order.customerName || '\u2014'}</td>
                         <td className="p-2 text-gray-400 truncate max-w-[120px] text-xs">{order.buyerNickname || order.buyer?.nickname || '\u2014'}</td>
-                        <td className="p-2 text-gray-400 truncate max-w-[180px]">{order.address || order.shipping?.receiver_address?.street_name || '\u2014'}</td>
+                        <td className="p-2 text-gray-400 truncate max-w-[200px]">{order.address || order.shipping?.receiver_address?.street_name || '\u2014'}</td>
                         <td className="p-2 text-gray-400 truncate max-w-[100px]">{order.city || order.shipping?.receiver_address?.city?.name || '\u2014'}</td>
-                        <td className="p-2 pr-3 text-gray-400 text-xs whitespace-nowrap">{order.createdAt || order.date_created ? new Date(order.createdAt || order.date_created).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }) : '\u2014'}</td>
+                        <td className="p-2 pr-3 text-gray-400 text-xs whitespace-nowrap">{dateStr}</td>
                       </tr>
                     )
                   })}
