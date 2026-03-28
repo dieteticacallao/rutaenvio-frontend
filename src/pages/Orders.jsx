@@ -411,14 +411,14 @@ export default function Orders() {
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium text-white">{order.orderNumber}</span>
                     {order.source === 'TIENDANUBE' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/20">TN</span>}
-                    {order.source === 'MERCADOLIBRE' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-900 border border-yellow-500/30" style={{color: '#854d0e'}}>ML</span>}
+                    {order.source === 'MERCADOLIBRE' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-yellow-400/40" style={{backgroundColor: '#FFE600', color: '#000'}}>ML</span>}
                     {order.source === 'EXCEL' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">XLS</span>}
                     {order.source === 'MANUAL' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-400 border border-gray-500/20">MAN</span>}
                   </div>
                 </td>
                 <td className="p-3">
                   <div className="text-gray-200">{order.customerName}</div>
-                  <div className="text-xs text-gray-500">{order.customerPhone}</div>
+                  {order.customerPhone && !/X{4,}/i.test(order.customerPhone) && <div className="text-xs text-gray-500">{order.customerPhone}</div>}
                 </td>
                 <td className="p-3">
                   <div className="text-gray-300 max-w-[200px] truncate">{order.address}</div>
