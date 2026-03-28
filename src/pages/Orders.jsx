@@ -698,13 +698,12 @@ function toLocalDate(date) {
 
 function MLImportModal({ onClose, onImported }) {
   const today = toLocalDate(new Date())
-  const threeDaysAgo = toLocalDate(new Date(Date.now() - 3 * 86400000))
   const [mlOrders, setMlOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(new Set())
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState(null)
-  const [dateFrom, setDateFrom] = useState(threeDaysAgo)
+  const [dateFrom, setDateFrom] = useState(today)
   const [dateTo, setDateTo] = useState(today)
 
   const fetchMLOrders = useCallback((from, to) => {
@@ -741,6 +740,7 @@ function MLImportModal({ onClose, onImported }) {
   }
 
   const yesterday = toLocalDate(new Date(Date.now() - 86400000))
+  const threeDaysAgo = toLocalDate(new Date(Date.now() - 3 * 86400000))
   const sevenDaysAgo = toLocalDate(new Date(Date.now() - 7 * 86400000))
 
   const toggleSelect = (id) => {
@@ -978,14 +978,7 @@ function TNImportModal({ onClose, onImported }) {
   }
 
   const yesterday = toLocalDate(new Date(Date.now() - 86400000))
-  const weekStart = (() => {
-    const now = new Date()
-    const day = now.getDay()
-    const diff = day === 0 ? 6 : day - 1
-    const mon = new Date(now)
-    mon.setDate(now.getDate() - diff)
-    return toLocalDate(mon)
-  })()
+  const threeDaysAgo = toLocalDate(new Date(Date.now() - 3 * 86400000))
   const sevenDaysAgo = toLocalDate(new Date(Date.now() - 7 * 86400000))
 
   const toggleSelect = (id) => {
@@ -1045,7 +1038,7 @@ function TNImportModal({ onClose, onImported }) {
           {[
             { label: 'Hoy', from: today, to: today },
             { label: 'Ayer', from: yesterday, to: yesterday },
-            { label: 'Esta semana', from: weekStart, to: today },
+            { label: '3 dias', from: threeDaysAgo, to: today },
             { label: '7 dias', from: sevenDaysAgo, to: today },
           ].map(btn => (
             <button
