@@ -697,23 +697,14 @@ function toLocalDate(date) {
 }
 
 function MLImportModal({ onClose, onImported }) {
-  const today = toLocalDate(new Date())
   const [mlOrders, setMlOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(new Set())
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState(null)
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
 
-  const fetchMLOrders = useCallback((from, to) => {
-    setLoading(true)
-    setError(null)
-    setSelected(new Set())
-    const params = {}
-    if (from) params.dateFrom = from
-    if (to) params.dateTo = to
-    api.get('/mercadolibre/orders', { params })
+  useEffect(() => {
+    api.get('/mercadolibre/orders')
       .then(r => {
         const d = r.data
         const list = Array.isArray(d) ? d
@@ -729,19 +720,6 @@ function MLImportModal({ onClose, onImported }) {
         setLoading(false)
       })
   }, [])
-
-  useEffect(() => {
-    fetchMLOrders(dateFrom, dateTo)
-  }, [dateFrom, dateTo, fetchMLOrders])
-
-  const setQuickDate = (from, to) => {
-    setDateFrom(from)
-    setDateTo(to)
-  }
-
-  const yesterday = toLocalDate(new Date(Date.now() - 86400000))
-  const threeDaysAgo = toLocalDate(new Date(Date.now() - 3 * 86400000))
-  const sevenDaysAgo = toLocalDate(new Date(Date.now() - 7 * 86400000))
 
   const toggleSelect = (id) => {
     setSelected(prev => {
@@ -799,56 +777,9 @@ function MLImportModal({ onClose, onImported }) {
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setQuickDate('', '')}
-            className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
-              !dateFrom && !dateTo
-                ? 'bg-brand-500 text-white'
-                : 'bg-navy-800 text-gray-400 hover:text-white hover:bg-navy-700'
-            }`}
-          >
-            Todos
-          </button>
-          {[
-            { label: 'Hoy', from: today, to: today },
-            { label: 'Ayer', from: yesterday, to: yesterday },
-            { label: '3 dias', from: threeDaysAgo, to: today },
-            { label: '7 dias', from: sevenDaysAgo, to: today },
-          ].map(btn => (
-            <button
-              key={btn.label}
-              onClick={() => setQuickDate(btn.from, btn.to)}
-              className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
-                dateFrom === btn.from && dateTo === btn.to && btn.from
-                  ? 'bg-brand-500 text-white'
-                  : 'bg-navy-800 text-gray-400 hover:text-white hover:bg-navy-700'
-              }`}
-            >
-              {btn.label}
-            </button>
-          ))}
-          <div className="flex items-center gap-1.5 ml-auto">
-            <label className="text-xs text-gray-500">Desde</label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={e => { if (e.target.value) setDateFrom(e.target.value) }}
-              className="input text-xs py-1.5 px-2 cursor-pointer [color-scheme:dark]"
-            />
-            <label className="text-xs text-gray-500">Hasta</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={e => { if (e.target.value) setDateTo(e.target.value) }}
-              className="input text-xs py-1.5 px-2 cursor-pointer [color-scheme:dark]"
-            />
-          </div>
-        </div>
-
         {loading ? (
           <div className="flex items-center justify-center py-12 text-gray-500">
-            <Loader2 size={24} className="animate-spin mr-2" /> Cargando pedidos de MercadoLibre...
+            <Loader2 size={24} className="animate-spin mr-2" /> Cargando pedidos Flex...
           </div>
         ) : error ? (
           <div className="flex items-center gap-2 text-red-400 py-8 justify-center">
