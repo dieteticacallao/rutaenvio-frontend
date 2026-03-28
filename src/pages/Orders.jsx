@@ -39,9 +39,14 @@ export default function Orders() {
     api.get('/dashboard/settings').then(r => {
       setTnConnected(!!r.data?.tnStoreId)
     }).catch(() => {})
-    api.get('/mercadolibre/status').then(r => {
-      setMlConnected(!!r.data?.connected)
-    }).catch(() => {})
+    const mlBaseUrl = import.meta.env.VITE_API_URL || '/api'
+    const mlToken = localStorage.getItem('token')
+    fetch(mlBaseUrl + '/mercadolibre/status', {
+      headers: { 'Authorization': 'Bearer ' + mlToken, 'Content-Type': 'application/json' }
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then(data => setMlConnected(!!data?.connected))
+      .catch(() => {})
     api.get('/zones').then(r => {
       setZones(r.data?.data || [])
     }).catch(() => {})

@@ -541,8 +541,13 @@ function MercadoLibreSection() {
 
   const loadStatus = () => {
     setLoading(true)
-    api.get('/mercadolibre/status')
-      .then(r => { setStatus(r.data || {}); setLoading(false) })
+    const baseUrl = import.meta.env.VITE_API_URL || '/api'
+    const token = localStorage.getItem('token')
+    fetch(baseUrl + '/mercadolibre/status', {
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then(data => { setStatus(data || {}); setLoading(false) })
       .catch(() => { setStatus({ connected: false }); setLoading(false) })
   }
 
@@ -557,11 +562,17 @@ function MercadoLibreSection() {
   const handleDisconnect = async () => {
     setDisconnecting(true)
     try {
-      await api.delete('/mercadolibre/disconnect')
+      const baseUrl = import.meta.env.VITE_API_URL || '/api'
+      const token = localStorage.getItem('token')
+      const res = await fetch(baseUrl + '/mercadolibre/disconnect', {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+      })
+      if (!res.ok) throw new Error('Error')
       toast.success('MercadoLibre desconectado')
       loadStatus()
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Error al desconectar')
+      toast.error('Error al desconectar')
     }
     setDisconnecting(false)
   }
