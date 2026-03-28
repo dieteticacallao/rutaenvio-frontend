@@ -45,7 +45,7 @@ export default function Orders() {
       headers: { 'Authorization': 'Bearer ' + mlToken, 'Content-Type': 'application/json' }
     })
       .then(r => r.ok ? r.json() : Promise.reject(r))
-      .then(data => setMlConnected(!!data?.connected))
+      .then(res => setMlConnected(!!res?.data?.connected || !!res?.connected))
       .catch(() => {})
     api.get('/zones').then(r => {
       setZones(r.data?.data || [])

@@ -547,7 +547,7 @@ function MercadoLibreSection() {
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
     })
       .then(r => r.ok ? r.json() : Promise.reject(r))
-      .then(data => { setStatus(data || {}); setLoading(false) })
+      .then(res => { setStatus(res?.data || res || {}); setLoading(false) })
       .catch(() => { setStatus({ connected: false }); setLoading(false) })
   }
 
