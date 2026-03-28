@@ -789,8 +789,10 @@ function MLImportModal({ onClose, onImported }) {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <ShoppingBag size={20} className="text-yellow-400" />
-              Importar pedidos de MercadoLibre
+              Importar pedidos
+              <span className="inline-flex items-center gap-1 text-sm font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFE600', color: '#000' }}>
+                <ShoppingBag size={14} /> ML
+              </span>
             </h2>
             <p className="text-sm text-gray-500 mt-1">Pedidos Flex pendientes de envio</p>
           </div>
@@ -1028,7 +1030,12 @@ function TNImportModal({ onClose, onImported }) {
       <div onClick={e => e.stopPropagation()} className="card-p w-full max-w-4xl space-y-4 max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2"><Cloud size={20} className="text-purple-400" /> Importar pedidos de Tiendanube</h2>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              Importar pedidos
+              <span className="inline-flex items-center gap-1 text-sm font-semibold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/20">
+                <Cloud size={14} /> TN
+              </span>
+            </h2>
             <p className="text-sm text-gray-500 mt-1">Pedidos con envio RutaEnvio pendientes</p>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
