@@ -704,7 +704,14 @@ function MLImportModal({ onClose, onImported }) {
   const [error, setError] = useState(null)
 
   // Unique key per order - mlShipmentId is most reliable, fallback to packId, id, or index
-  const getOrderKey = (order, idx) => String(order.mlShipmentId || order.shipmentId || order.packId || order.id || idx)
+  // Use mlShipmentId as primary key - it's unique per shipment in ML
+  // Fallback chain ensures uniqueness even with duplicate pack IDs
+  const getOrderKey = (order, idx) => {
+    if (order.mlShipmentId) return String(order.mlShipmentId)
+    if (order.shipmentId) return String(order.shipmentId)
+    // packId and id can be duplicated across items in same pack, so suffix with idx
+    return `${order.packId || order.id || 'order'}-${idx}`
+  }
 
   useEffect(() => {
     api.get('/mercadolibre/orders')
