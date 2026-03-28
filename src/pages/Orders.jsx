@@ -703,6 +703,9 @@ function MLImportModal({ onClose, onImported }) {
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState(null)
 
+  // Unique key per order - mlShipmentId is most reliable, fallback to packId, id, or index
+  const getOrderKey = (order, idx) => String(order.mlShipmentId || order.shipmentId || order.packId || order.id || idx)
+
   useEffect(() => {
     api.get('/mercadolibre/orders')
       .then(r => {
@@ -721,11 +724,11 @@ function MLImportModal({ onClose, onImported }) {
       })
   }, [])
 
-  const toggleSelect = (id) => {
+  const toggleSelect = (key) => {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
@@ -736,7 +739,7 @@ function MLImportModal({ onClose, onImported }) {
     if (selected.size === importableOrders.length) {
       setSelected(new Set())
     } else {
-      setSelected(new Set(importableOrders.map(o => o.id)))
+      setSelected(new Set(importableOrders.map((o, i) => getOrderKey(o, i))))
     }
   }
 
@@ -747,11 +750,14 @@ function MLImportModal({ onClose, onImported }) {
     }
     setImporting(true)
     try {
-      const selectedIds = Array.from(selected)
+      const selectedKeys = Array.from(selected)
+      // Map keys back to order IDs for the backend
+      const selectedOrders = mlOrders.filter((o, i) => selectedKeys.includes(getOrderKey(o, i)))
+      const orderIds = selectedOrders.map(o => o.mlShipmentId || o.shipmentId || o.packId || o.id)
       const { data } = await api.post('/mercadolibre/orders/import', {
-        orderIds: selectedIds
+        orderIds
       })
-      const imported = data?.imported ?? selectedIds.length
+      const imported = data?.imported ?? orderIds.length
       toast.success(`Se importaron ${imported} pedidos de MercadoLibre`)
       onImported()
       onClose()
@@ -818,23 +824,24 @@ function MLImportModal({ onClose, onImported }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-navy-800/50">
-                  {mlOrders.map(order => {
+                  {mlOrders.map((order, idx) => {
                     const imported = order.alreadyImported
+                    const key = getOrderKey(order, idx)
                     const dateRaw = order.dateCreated || order.createdAt || order.date_created
                     const dateStr = dateRaw ? new Date(dateRaw).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }) : '\u2014'
                     return (
                       <tr
-                        key={order.id}
-                        onClick={() => !imported && toggleSelect(order.id)}
+                        key={key}
+                        onClick={() => !imported && toggleSelect(key)}
                         className={`transition-colors ${imported ? 'opacity-40' : 'cursor-pointer'} ${
-                          !imported && selected.has(order.id) ? 'bg-brand-500/5' : !imported ? 'hover:bg-navy-800/30' : ''
+                          !imported && selected.has(key) ? 'bg-brand-500/5' : !imported ? 'hover:bg-navy-800/30' : ''
                         }`}
                       >
                         <td className="p-2 pl-3" onClick={e => e.stopPropagation()}>
                           <input
                             type="checkbox"
-                            checked={!imported && selected.has(order.id)}
-                            onChange={() => !imported && toggleSelect(order.id)}
+                            checked={!imported && selected.has(key)}
+                            onChange={() => !imported && toggleSelect(key)}
                             disabled={imported}
                             className="rounded border-navy-700 bg-navy-900 text-brand-500 disabled:opacity-30"
                           />
