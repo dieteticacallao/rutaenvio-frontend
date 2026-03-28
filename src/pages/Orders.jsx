@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP } from '../lib/store'
-import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Upload, AlertCircle, CheckCircle2, Link2, ChevronDown, Cloud, ShoppingBag, ShoppingCart } from 'lucide-react'
+import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Upload, AlertCircle, CheckCircle2, Check, Link2, ChevronDown, Cloud, ShoppingBag, ShoppingCart } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Orders() {
@@ -778,13 +778,6 @@ function MLImportModal({ onClose, onImported }) {
     setImporting(false)
   }
 
-  const ML_STATUS_MAP = {
-    pending: { label: 'Pendiente', color: 'bg-amber-500/20 text-amber-400' },
-    ready_to_ship: { label: 'Listo', color: 'bg-blue-500/20 text-blue-400' },
-    shipped: { label: 'En camino', color: 'bg-purple-500/20 text-purple-400' },
-    delivered: { label: 'Entregado', color: 'bg-emerald-500/20 text-emerald-400' },
-  }
-
   const yesterday = toLocalDate(new Date(Date.now() - 86400000))
   const weekStart = (() => {
     const now = new Date()
@@ -907,19 +900,17 @@ function MLImportModal({ onClose, onImported }) {
                     <th className="p-2 text-left">Usuario ML</th>
                     <th className="p-2 text-left">Direccion</th>
                     <th className="p-2 text-left">Ciudad</th>
-                    <th className="p-2 text-left">Fecha</th>
-                    <th className="p-2 pr-3 text-left">Estado</th>
+                    <th className="p-2 pr-3 text-left">Fecha</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-navy-800/50">
                   {mlOrders.map(order => {
                     const imported = order.alreadyImported
-                    const statusInfo = ML_STATUS_MAP[order.shippingStatus] || ML_STATUS_MAP[order.shipping_status] || { label: order.shippingStatus || order.shipping_status || '\u2014', color: 'bg-gray-500/20 text-gray-400' }
                     return (
                       <tr
                         key={order.id}
                         onClick={() => !imported && toggleSelect(order.id)}
-                        className={`transition-colors ${imported ? 'opacity-50' : 'cursor-pointer'} ${
+                        className={`transition-colors ${imported ? 'opacity-40' : 'cursor-pointer'} ${
                           !imported && selected.has(order.id) ? 'bg-brand-500/5' : !imported ? 'hover:bg-navy-800/30' : ''
                         }`}
                       >
@@ -933,17 +924,16 @@ function MLImportModal({ onClose, onImported }) {
                           />
                         </td>
                         <td className="p-2 font-mono text-xs">
-                          <span className={imported ? 'text-gray-500' : 'text-white'}>#{order.packId || order.id}</span>
-                          {imported && <span className="ml-1 text-gray-600 text-[9px]">(importado)</span>}
+                          <span className="inline-flex items-center gap-1">
+                            <span className={imported ? 'text-gray-500' : 'text-white'}>#{order.packId || order.id}</span>
+                            {imported && <Check size={12} className="text-emerald-500" />}
+                          </span>
                         </td>
                         <td className="p-2 text-gray-300 truncate max-w-[140px]">{order.customerName || '\u2014'}</td>
                         <td className="p-2 text-gray-400 truncate max-w-[120px] text-xs">{order.buyerNickname || order.buyer?.nickname || '\u2014'}</td>
                         <td className="p-2 text-gray-400 truncate max-w-[180px]">{order.address || order.shipping?.receiver_address?.street_name || '\u2014'}</td>
                         <td className="p-2 text-gray-400 truncate max-w-[100px]">{order.city || order.shipping?.receiver_address?.city?.name || '\u2014'}</td>
-                        <td className="p-2 text-gray-400 text-xs whitespace-nowrap">{order.createdAt || order.date_created ? new Date(order.createdAt || order.date_created).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }) : '\u2014'}</td>
-                        <td className="p-2 pr-3">
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${statusInfo.color}`}>{statusInfo.label}</span>
-                        </td>
+                        <td className="p-2 pr-3 text-gray-400 text-xs whitespace-nowrap">{order.createdAt || order.date_created ? new Date(order.createdAt || order.date_created).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }) : '\u2014'}</td>
                       </tr>
                     )
                   })}
@@ -1177,7 +1167,7 @@ function TNImportModal({ onClose, onImported }) {
                       <tr
                         key={order.id}
                         onClick={() => !imported && toggleSelect(order.id)}
-                        className={`transition-colors ${imported ? 'opacity-50' : 'cursor-pointer'} ${
+                        className={`transition-colors ${imported ? 'opacity-40' : 'cursor-pointer'} ${
                           !imported && selected.has(order.id) ? 'bg-brand-500/5' : !imported ? 'hover:bg-navy-800/30' : ''
                         }`}
                       >
@@ -1191,8 +1181,10 @@ function TNImportModal({ onClose, onImported }) {
                           />
                         </td>
                         <td className="p-2 font-mono text-xs">
-                          <span className={imported ? 'text-gray-500' : 'text-white'}>#{order.number || order.orderNumber || order.id}</span>
-                          {imported && <span className="ml-1 text-gray-600 text-[9px]">(importado)</span>}
+                          <span className="inline-flex items-center gap-1">
+                            <span className={imported ? 'text-gray-500' : 'text-white'}>#{order.number || order.orderNumber || order.id}</span>
+                            {imported && <Check size={12} className="text-emerald-500" />}
+                          </span>
                         </td>
                         <td className="p-2 text-gray-300 truncate max-w-[140px]">{order.customerName || order.customer?.name || order.contact_name || 'Sin nombre'}</td>
                         <td className="p-2 text-gray-400 truncate max-w-[180px]">{order.address || order.shipping_address?.address || order.shipping_address?.street || '\u2014'}</td>
