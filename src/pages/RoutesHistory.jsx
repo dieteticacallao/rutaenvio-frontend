@@ -51,7 +51,7 @@ export default function RoutesHistory() {
   }
 
   const cancelRoute = async (routeId) => {
-    if (!window.confirm('Estas seguro de que queres cancelar esta ruta? Los pedidos no entregados vuelven a estado pendiente.')) return
+    if (!window.confirm('¿Cancelar esta ruta? Los pedidos vuelven a Pendiente.')) return
     try {
       await api.put(`/routes/${routeId}/cancel`)
       toast.success('Ruta cancelada')
@@ -64,17 +64,6 @@ export default function RoutesHistory() {
     }
   }
 
-  const deleteRoute = async (routeId) => {
-    if (!window.confirm('Eliminar esta ruta del historial?')) return
-    try {
-      await api.delete(`/routes/${routeId}`)
-      toast.success('Ruta eliminada')
-      setRoutes(prev => prev.filter(r => r.id !== routeId))
-      if (selectedRoute?.id === routeId) setSelectedRoute(null)
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Error al eliminar')
-    }
-  }
 
   const finishRoute = async (route) => {
     const orders = route.orders || []
@@ -163,19 +152,22 @@ export default function RoutesHistory() {
   }
 
   const getFinishTime = (route) => {
-    if (route.status === 'COMPLETED' && route.completedAt) return formatTime(route.completedAt)
-    if (route.status === 'COMPLETED' && route.finishedAt) return formatTime(route.finishedAt)
-    // For completed routes, use last delivery time
-    if (route.status === 'COMPLETED' && route.orders) {
-      const delivered = route.orders.filter(o => o.status === 'DELIVERED' && o.deliveredAt)
-      if (delivered.length > 0) {
-        const last = delivered.reduce((a, b) => new Date(a.deliveredAt) > new Date(b.deliveredAt) ? a : b)
-        return formatTime(last.deliveredAt)
+    const routeStatus = computeRouteStatus(route)
+    if (routeStatus === 'COMPLETED') {
+      if (route.completedAt) return formatTime(route.completedAt)
+      if (route.finishedAt) return formatTime(route.finishedAt)
+      if (route.orders) {
+        const delivered = route.orders.filter(o => o.status === 'DELIVERED' && o.deliveredAt)
+        if (delivered.length > 0) {
+          const last = delivered.reduce((a, b) => new Date(a.deliveredAt) > new Date(b.deliveredAt) ? a : b)
+          return formatTime(last.deliveredAt)
+        }
       }
+      return '—'
     }
-    // In progress: show ETA if available
-    if (['CONFIRMED', 'IN_PROGRESS'].includes(route.status)) {
-      if (route.estimatedEnd) return `ETA ${formatTime(route.estimatedEnd)}`
+    if (routeStatus === 'CANCELLED') return '—'
+    if (routeStatus === 'IN_PROGRESS') {
+      if (route.estimatedEndAt) return `ETA ${formatTime(route.estimatedEndAt)}`
       return 'En curso'
     }
     return '—'
@@ -183,10 +175,17 @@ export default function RoutesHistory() {
 
   const getRouteDuration = (route) => {
     if (!route.startedAt) return '—'
-    if (route.status === 'COMPLETED') {
+    const routeStatus = computeRouteStatus(route)
+    if (routeStatus === 'COMPLETED' || routeStatus === 'CANCELLED') {
+      // Duracion fija - no seguir contando
+      if (route.durationMinutes) {
+        if (route.durationMinutes < 60) return `${route.durationMinutes} min`
+        const h = Math.floor(route.durationMinutes / 60)
+        const m = route.durationMinutes % 60
+        return `${h}h ${m}m`
+      }
       const endAt = route.completedAt || route.finishedAt
       if (endAt) return getDuration(route.startedAt, endAt)
-      // Use last delivery
       if (route.orders) {
         const delivered = route.orders.filter(o => o.status === 'DELIVERED' && o.deliveredAt)
         if (delivered.length > 0) {
@@ -194,7 +193,9 @@ export default function RoutesHistory() {
           return getDuration(route.startedAt, last.deliveredAt)
         }
       }
+      return '—'
     }
+    // IN_PROGRESS: duracion dinamica
     return getDuration(route.startedAt, null)
   }
 
@@ -536,9 +537,9 @@ export default function RoutesHistory() {
                           </button>
                         )}
                         <button
-                          onClick={() => deleteRoute(route.id)}
+                          onClick={() => cancelRoute(route.id)}
                           className="text-gray-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-500/10"
-                          title="Eliminar ruta"
+                          title="Cancelar ruta"
                         >
                           <Trash2 size={16} />
                         </button>
