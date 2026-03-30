@@ -2,8 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { MapPin, Navigation, Phone, Package, CheckCircle2, Loader2, Camera, X, Truck, Clock, Play, ScanLine, PackageCheck, MessageCircle, CalendarClock, ChevronLeft, ChevronRight, List, Trophy } from 'lucide-react'
 import { Html5Qrcode } from 'html5-qrcode'
+import { io as socketIO } from 'socket.io-client'
 
 const API = import.meta.env.VITE_API_URL || '/api'
+const SOCKET_URL = API.replace(/\/api\/?$/, '') || window.location.origin
 
 const STATUS_CONFIG = {
   PENDING: { label: 'Pendiente', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
@@ -48,6 +50,7 @@ export default function RouteView() {
   const [routeEstimate, setRouteEstimate] = useState(null)
   const [activeIdx, setActiveIdx] = useState(0)
   const [showAllOrders, setShowAllOrders] = useState(false)
+  const [socketToast, setSocketToast] = useState(null)
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef({})
@@ -70,6 +73,46 @@ export default function RouteView() {
   useEffect(() => {
     if (token) fetchRoute()
   }, [token, fetchRoute])
+
+  // Socket.IO: escuchar actualizaciones de pedidos en tiempo real (ML Flex, etc.)
+  useEffect(() => {
+    if (!route?.id) return
+    const socket = socketIO(SOCKET_URL, { transports: ['websocket', 'polling'] })
+    socket.on('connect', () => {
+      socket.emit('route:join', { routeId: route.id })
+    })
+    socket.on('order:status', ({ orderId, status, customerName }) => {
+      setRoute(prev => {
+        if (!prev) return prev
+        const orderExists = prev.orders.some(o => o.id === orderId)
+        if (!orderExists) return prev
+        const updated = {
+          ...prev,
+          orders: prev.orders.map(o => o.id === orderId
+            ? { ...o, status, ...(status === 'DELIVERED' ? { deliveredAt: new Date().toISOString() } : {}) }
+            : o)
+        }
+        // Auto-advance if delivered
+        if (status === 'DELIVERED') {
+          const currentIdx = updated.orders.findIndex(o => o.id === orderId)
+          setActiveIdx(prevIdx => {
+            if (currentIdx === prevIdx || DONE_STATUSES.includes(updated.orders[prevIdx]?.status)) {
+              const nextIdx = updated.orders.findIndex((o, i) => i > prevIdx && !DONE_STATUSES.includes(o.status))
+              return nextIdx >= 0 ? nextIdx : prevIdx
+            }
+            return prevIdx
+          })
+        }
+        return updated
+      })
+      // Show toast for delivered
+      if (status === 'DELIVERED' && customerName) {
+        setSocketToast(`\u2713 ${customerName} marcado como entregado por ML Flex`)
+        setTimeout(() => setSocketToast(null), 4000)
+      }
+    })
+    return () => { socket.disconnect() }
+  }, [route?.id])
 
   // Extract origin from any possible backend field
   const getOrigin = () => {
@@ -712,6 +755,13 @@ export default function RouteView() {
 
   return (
     <div className="min-h-screen bg-navy-950 pb-8">
+      {/* Socket toast notification */}
+      {socketToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-emerald-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg animate-pulse max-w-sm text-center">
+          {socketToast}
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-navy-900 border-b border-navy-800 px-4 py-3 sticky top-0 z-50">
         <div className="max-w-2xl mx-auto">
