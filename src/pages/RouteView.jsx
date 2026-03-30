@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { MapPin, Navigation, Phone, Package, CheckCircle2, Loader2, Camera, X, Truck, Clock, Play, ScanLine, PackageCheck, MessageCircle, CalendarClock } from 'lucide-react'
+import { MapPin, Navigation, Phone, Package, CheckCircle2, Loader2, Camera, X, Truck, Clock, Play, ScanLine, PackageCheck, MessageCircle, CalendarClock, ChevronLeft, ChevronRight, List, Trophy } from 'lucide-react'
 import { Html5Qrcode } from 'html5-qrcode'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -16,6 +16,8 @@ const STATUS_CONFIG = {
   CANCELLED: { label: 'Cancelado', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
   RESCHEDULED: { label: 'Reprogramado', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
 }
+
+const DONE_STATUSES = ['DELIVERED', 'CANCELLED', 'RESCHEDULED']
 
 function getDriverLocation() {
   return new Promise((resolve) => {
@@ -44,6 +46,8 @@ export default function RouteView() {
   const [pickingUp, setPickingUp] = useState(null)
   const [scanModalOrder, setScanModalOrder] = useState(null)
   const [routeEstimate, setRouteEstimate] = useState(null)
+  const [activeIdx, setActiveIdx] = useState(0)
+  const [showAllOrders, setShowAllOrders] = useState(false)
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef({})
@@ -70,11 +74,8 @@ export default function RouteView() {
   // Extract origin from any possible backend field
   const getOrigin = () => {
     if (!route) return null
-    // Try route.origin object
     if (route.origin?.lat && route.origin?.lng) return route.origin
-    // Try route.location object
     if (route.location?.lat && route.location?.lng) return route.location
-    // Try flat fields on route
     if (route.originLat && route.originLng) return { lat: route.originLat, lng: route.originLng }
     if (route.startLat && route.startLng) return { lat: route.startLat, lng: route.startLng }
     return null
@@ -107,7 +108,7 @@ export default function RouteView() {
 
     route.orders.forEach(order => {
       if (!order.lat && !order.lng) return
-      addOrderMarker(L, order, bounds)
+      addOrderMarker(L, order, bounds, false)
     })
 
     const lineCoords = route.orders.filter(o => o.lat && o.lng).map(o => [o.lat, o.lng])
@@ -123,7 +124,19 @@ export default function RouteView() {
     }
   }, [route?.id])
 
-  // Fetch OSRM route estimate (origin -> pedido1 -> pedido2 -> ... -> ultimoPedido)
+  // Highlight active order marker on map
+  useEffect(() => {
+    if (!route || !mapInstance.current) return
+    const L = window.L
+    if (!L) return
+    route.orders.forEach((order, idx) => {
+      if (!order.lat || !order.lng) return
+      const isActive = idx === activeIdx && !!route.startedAt
+      refreshMarker(L, order, isActive)
+    })
+  }, [activeIdx, route?.orders])
+
+  // Fetch OSRM route estimate
   useEffect(() => {
     if (!route || routeEstimate) return
     const origin = getOrigin()
@@ -144,18 +157,37 @@ export default function RouteView() {
       .catch(() => {})
   }, [route?.id])
 
-  function addOrderMarker(L, order, bounds) {
+  // Auto-set activeIdx to first non-done order when route data changes
+  useEffect(() => {
+    if (!route?.startedAt) return
+    const nextIdx = route.orders.findIndex(o => !DONE_STATUSES.includes(o.status))
+    if (nextIdx >= 0) setActiveIdx(nextIdx)
+    else setActiveIdx(route.orders.length - 1) // all done, show last
+  }, [route?.startedAt])
+
+  function addOrderMarker(L, order, bounds, isActive) {
     if (!order.lat || !order.lng) return
     const color = order.status === 'DELIVERED' ? '#10b981' : order.status === 'IN_TRANSIT' ? '#3b82f6' : '#f59e0b'
+    const size = isActive ? 38 : 28
+    const fontSize = isActive ? '14px' : '11px'
+    const border = isActive ? '3px solid #fff' : '2px solid #fff'
     const marker = L.marker([order.lat, order.lng], {
       icon: L.divIcon({
         className: '',
-        html: `<div style="width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 2px 6px ${color}60">${order.status === 'DELIVERED' ? '\u2713' : order.routePosition}</div>`,
-        iconSize: [28, 28], iconAnchor: [14, 14]
-      })
+        html: `<div style="width:${size}px;height:${size}px;background:${color};border:${border};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:${fontSize};font-weight:700;color:#fff;box-shadow:0 2px 8px ${color}80;z-index:${isActive ? 1000 : 1}">${order.status === 'DELIVERED' ? '\u2713' : order.routePosition}</div>`,
+        iconSize: [size, size], iconAnchor: [size/2, size/2]
+      }),
+      zIndexOffset: isActive ? 1000 : 0
     }).addTo(mapInstance.current)
     markersRef.current[order.id] = marker
     if (bounds) bounds.push([order.lat, order.lng])
+  }
+
+  function refreshMarker(L, order, isActive) {
+    if (!order.lat || !order.lng || !mapInstance.current) return
+    const oldMarker = markersRef.current[order.id]
+    if (oldMarker) mapInstance.current.removeLayer(oldMarker)
+    addOrderMarker(L, order, null, isActive)
   }
 
   function updateMarkerColor(orderId, status) {
@@ -163,20 +195,20 @@ export default function RouteView() {
     if (!L || !mapInstance.current) return
     const order = route.orders.find(o => o.id === orderId)
     if (!order || !order.lat || !order.lng) return
+    const idx = route.orders.findIndex(o => o.id === orderId)
     const oldMarker = markersRef.current[orderId]
     if (oldMarker) mapInstance.current.removeLayer(oldMarker)
-    const color = status === 'DELIVERED' ? '#10b981' : status === 'IN_TRANSIT' ? '#3b82f6' : '#f59e0b'
-    const marker = L.marker([order.lat, order.lng], {
-      icon: L.divIcon({
-        className: '',
-        html: `<div style="width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;box-shadow:0 2px 6px ${color}60">${status === 'DELIVERED' ? '\u2713' : order.routePosition}</div>`,
-        iconSize: [28, 28], iconAnchor: [14, 14]
-      })
-    }).addTo(mapInstance.current)
-    markersRef.current[orderId] = marker
+    const updatedOrder = { ...order, status }
+    addOrderMarker(L, updatedOrder, null, idx === activeIdx)
   }
 
   // --- Actions ---
+
+  const advanceToNext = () => {
+    if (!route) return
+    const nextIdx = route.orders.findIndex((o, i) => i > activeIdx && !DONE_STATUSES.includes(o.status))
+    if (nextIdx >= 0) setActiveIdx(nextIdx)
+  }
 
   const confirmPickup = async (orderId) => {
     setPickingUp(orderId)
@@ -215,7 +247,6 @@ export default function RouteView() {
   useEffect(() => {
     if (!scanModalOrder) return
     const elementId = 'qr-reader'
-    // Wait for DOM element
     const timer = setTimeout(() => {
       const scanner = new Html5Qrcode(elementId)
       scannerRef.current = scanner
@@ -223,7 +254,6 @@ export default function RouteView() {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText) => {
-          // QR detected - try to parse orderId
           let orderId = null
           try {
             const parsed = JSON.parse(decodedText)
@@ -239,11 +269,9 @@ export default function RouteView() {
           if (orderId) {
             confirmPickup(orderId)
           }
-          // If QR could not be parsed, do NOT auto-confirm. User can retry or use manual.
         },
-        () => {} // ignore scan errors (no QR found yet)
+        () => {}
       ).catch(() => {
-        // Camera not available - just close scanner, do NOT auto-confirm
         scanner.clear()
         scannerRef.current = null
         setScanModalOrder(null)
@@ -340,13 +368,20 @@ export default function RouteView() {
       })
       const data = await r.json()
       if (data.success) {
-        setRoute(prev => ({
-          ...prev,
-          orders: prev.orders.map(o => o.id === deliverModal.id
-            ? { ...o, status: 'DELIVERED', deliveredAt: new Date().toISOString(), receiverName }
-            : o)
-        }))
-        updateMarkerColor(deliverModal.id, 'DELIVERED')
+        const deliveredId = deliverModal.id
+        setRoute(prev => {
+          const updated = {
+            ...prev,
+            orders: prev.orders.map(o => o.id === deliveredId
+              ? { ...o, status: 'DELIVERED', deliveredAt: new Date().toISOString(), receiverName }
+              : o)
+          }
+          // Auto-advance to next pending order
+          const nextIdx = updated.orders.findIndex((o, i) => i > activeIdx && !DONE_STATUSES.includes(o.status))
+          if (nextIdx >= 0) setTimeout(() => setActiveIdx(nextIdx), 300)
+          return updated
+        })
+        updateMarkerColor(deliveredId, 'DELIVERED')
         setDeliverModal(null)
       }
     } catch (err) {
@@ -373,10 +408,15 @@ export default function RouteView() {
       })
       const data = await r.json()
       if (data.success) {
-        setRoute(prev => ({
-          ...prev,
-          orders: prev.orders.map(o => o.id === order.id ? { ...o, status: 'RESCHEDULED' } : o)
-        }))
+        setRoute(prev => {
+          const updated = {
+            ...prev,
+            orders: prev.orders.map(o => o.id === order.id ? { ...o, status: 'RESCHEDULED' } : o)
+          }
+          const nextIdx = updated.orders.findIndex((o, i) => i > activeIdx && !DONE_STATUSES.includes(o.status))
+          if (nextIdx >= 0) setTimeout(() => setActiveIdx(nextIdx), 300)
+          return updated
+        })
       }
     } catch (err) {
       console.error('Error reprogramando pedido:', err)
@@ -415,7 +455,7 @@ export default function RouteView() {
   const routeDate = route.date ? new Date(route.date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
   const routeStarted = !!route.startedAt
 
-  // Pickup phase: all orders that still need pickup (ML orders excluded - no manual pickup)
+  // Pickup phase: ML orders excluded from manual pickup
   const manualOrders = route.orders.filter(o => o.source !== 'MERCADOLIBRE')
   const pendingPickup = manualOrders.filter(o => ['PENDING', 'ASSIGNED'].includes(o.status))
   const pickedUpCount = manualOrders.filter(o => !['PENDING', 'ASSIGNED'].includes(o.status)).length
@@ -436,6 +476,239 @@ export default function RouteView() {
   const avgMinutes = deliveredCount > 0 && routeStartTime
     ? Math.round(((lastDeliveryTime || now) - routeStartTime) / 60000 / deliveredCount)
     : 0
+
+  // Active order for single-view mode
+  const activeOrder = route.orders[activeIdx]
+  const allDone = route.orders.every(o => DONE_STATUSES.includes(o.status))
+  const processedCount = route.orders.filter(o => DONE_STATUSES.includes(o.status)).length
+
+  // Render a single order card (used in both active view and full list)
+  const renderOrderCard = (order, { compact = false } = {}) => {
+    const isML = order.source === 'MERCADOLIBRE'
+    const isTN = order.source === 'TIENDANUBE'
+    const needsPickup = ['PENDING', 'ASSIGNED'].includes(order.status)
+    const isPickedUp = order.status === 'PICKED_UP'
+    const isTransit = order.status === 'IN_TRANSIT' || order.status === 'ARRIVED'
+    const isDelivered = order.status === 'DELIVERED'
+    const isUpdating = updatingOrder === order.id
+    const isPickingUpThis = pickingUp === order.id
+
+    let badgeCfg
+    if (isML) {
+      badgeCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING
+    } else if (needsPickup) {
+      badgeCfg = { label: 'Pendiente de retiro', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' }
+    } else {
+      badgeCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING
+    }
+
+    // Compact mode for the "Ver todos" list
+    if (compact) {
+      return (
+        <div
+          key={order.id}
+          onClick={() => { if (routeStarted) { setActiveIdx(route.orders.indexOf(order)); setShowAllOrders(false) } }}
+          className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
+            isDelivered ? 'bg-emerald-500/5 border-emerald-500/20 opacity-60' :
+            order.status === 'RESCHEDULED' ? 'bg-amber-500/5 border-amber-500/20 opacity-60' :
+            order.status === 'CANCELLED' ? 'bg-red-500/5 border-red-500/20 opacity-60' :
+            'bg-navy-900 border-navy-800 cursor-pointer hover:border-brand-500/30'
+          }`}
+        >
+          <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${
+            isDelivered ? 'bg-emerald-500/20 text-emerald-400' : 'bg-navy-800 text-gray-400'
+          }`}>
+            {isDelivered ? '\u2713' : order.routePosition}
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className={`text-sm font-medium truncate ${isDelivered ? 'line-through text-gray-500' : 'text-white'}`}>
+              {order.customerName}
+            </div>
+            <div className="text-[11px] text-gray-500 truncate">{order.address}</div>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {isML && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">ML</span>}
+            {isTN && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">TN</span>}
+            <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${badgeCfg.color}`}>
+              {badgeCfg.label}
+            </span>
+          </div>
+        </div>
+      )
+    }
+
+    // Full card (active order view)
+    return (
+      <div key={order.id} className={`rounded-xl border p-4 ${isDelivered ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-navy-900 border-navy-800'}`}>
+        {/* Top row */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-white bg-brand-500/20 text-brand-400 w-8 h-8 rounded-full flex items-center justify-center">
+              {order.routePosition}
+            </span>
+            <span className="text-[11px] font-mono text-gray-500">{order.orderNumber}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {isML && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                ML
+              </span>
+            )}
+            {isTN && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-purple-500/20 text-purple-400 border-purple-500/30">
+                TN
+              </span>
+            )}
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeCfg.color}`}>
+              {badgeCfg.label}
+            </span>
+          </div>
+        </div>
+
+        <div className="text-base font-semibold text-white mb-1.5">{order.customerName}</div>
+
+        <div className="text-sm text-gray-400 flex items-start gap-1.5 mb-1">
+          <MapPin size={14} className="mt-0.5 flex-shrink-0" />
+          <span>
+            {order.address}
+            {order.city ? `, ${order.city}` : ''}
+            {order.addressDetail ? ` (${order.addressDetail})` : ''}
+          </span>
+        </div>
+
+        {order.customerPhone && (
+          <div className="flex items-center gap-2 mt-2">
+            <a href={`tel:${order.customerPhone}`} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-navy-800 text-brand-400 hover:bg-navy-700 transition-colors text-xs no-underline border border-navy-700">
+              <Phone size={12} /> Llamar
+            </a>
+            <a
+              href={`https://wa.me/${order.customerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${order.customerName}, soy tu repartidor de RutaEnvio. Estoy en camino con tu pedido #${order.orderNumber || ''}.`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors text-xs no-underline border border-emerald-500/20"
+            >
+              <MessageCircle size={12} /> WhatsApp
+            </a>
+          </div>
+        )}
+
+        {order.notes && (
+          <div className="text-xs text-amber-400/70 mt-2 bg-amber-500/5 rounded-lg px-2.5 py-1.5">
+            Nota: {order.notes}
+          </div>
+        )}
+
+        {/* Delivered info */}
+        {isDelivered && (
+          <div className="mt-3 text-sm text-emerald-400/70 flex items-center gap-1.5">
+            <CheckCircle2 size={14} />
+            <span>Entregado</span>
+            {order.deliveredAt && (
+              <span className="text-emerald-400 font-medium ml-1">
+                {new Date(order.deliveredAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} hs
+              </span>
+            )}
+            {order.receiverName && (
+              <span className="text-gray-500 ml-1">a {order.receiverName}</span>
+            )}
+          </div>
+        )}
+
+        {/* PICKUP PHASE: scan or manual confirm (before route started) - not for ML orders */}
+        {needsPickup && !routeStarted && !isML && (
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => openScanner(order)}
+              disabled={isPickingUpThis}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors text-sm font-medium disabled:opacity-50"
+            >
+              {isPickingUpThis ? <Loader2 size={14} className="animate-spin" /> : <ScanLine size={14} />}
+              Escanear retiro
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm(`Confirmar retiro manual del pedido #${order.routePosition} de ${order.customerName}?`)) {
+                  confirmPickup(order.id)
+                }
+              }}
+              disabled={isPickingUpThis}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-navy-800 text-amber-400 hover:bg-navy-700 transition-colors text-sm font-medium border border-amber-500/30 disabled:opacity-50"
+            >
+              {isPickingUpThis ? <Loader2 size={14} className="animate-spin" /> : <PackageCheck size={14} />}
+              Retiro manual
+            </button>
+          </div>
+        )}
+
+        {/* Picked up but route not started yet */}
+        {isPickedUp && !routeStarted && (
+          <div className="mt-3 text-sm text-emerald-400/70 flex items-center gap-1.5">
+            <PackageCheck size={14} /> Paquete retirado
+          </div>
+        )}
+
+        {/* Rescheduled info */}
+        {order.status === 'RESCHEDULED' && (
+          <div className="mt-3 text-sm text-amber-400/70 flex items-center gap-1.5">
+            <CalendarClock size={14} />
+            <span>Reprogramado para manana</span>
+          </div>
+        )}
+
+        {/* ML orders: only Navigate button */}
+        {isML && !isDelivered && order.status !== 'CANCELLED' && order.status !== 'RESCHEDULED' && (
+          <div className="mt-3">
+            <button
+              onClick={() => navigateTo(order)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-navy-800 text-white hover:bg-navy-950 transition-colors text-sm font-medium border border-navy-700"
+            >
+              <Navigation size={16} /> Navegar
+            </button>
+            <p className="text-[11px] text-gray-600 mt-1.5 text-center">Entrega gestionada por MercadoLibre Flex</p>
+          </div>
+        )}
+
+        {/* ROUTE PHASE: navigate + deliver + reschedule (after route started) - not for ML */}
+        {routeStarted && !isML && (isPickedUp || isTransit) && (
+          <div className="space-y-2 mt-3">
+            <div className="flex gap-2">
+              <button
+                onClick={() => navigateTo(order)}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-navy-800 text-white hover:bg-navy-950 transition-colors text-sm font-medium border border-navy-700"
+              >
+                <Navigation size={15} /> Navegar
+              </button>
+              {isPickedUp && (
+                <button
+                  onClick={() => markInTransit(order.id)}
+                  disabled={isUpdating}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50"
+                >
+                  {isUpdating ? <Loader2 size={15} className="animate-spin" /> : <Truck size={15} />}
+                  En camino
+                </button>
+              )}
+              {isTransit && (
+                <button
+                  onClick={() => openDeliverModal(order)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors text-sm font-medium"
+                >
+                  <CheckCircle2 size={15} /> Entregar
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => rescheduleOrder(order)}
+              disabled={isUpdating}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors text-xs font-medium border border-amber-500/20 disabled:opacity-50"
+            >
+              <CalendarClock size={13} /> Reprogramar para manana
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-navy-950 pb-8">
@@ -463,7 +736,7 @@ export default function RouteView() {
 
       <div className="max-w-2xl mx-auto">
         {/* Map */}
-        <div className="border-b border-navy-800" style={{ height: '260px' }}>
+        <div className="border-b border-navy-800" style={{ height: '220px' }}>
           <div ref={mapRef} className="w-full h-full" />
         </div>
 
@@ -494,7 +767,7 @@ export default function RouteView() {
               </div>
             )}
 
-            {/* Iniciar ruta button - always visible if at least 1 picked up */}
+            {/* Iniciar ruta button */}
             {pickedUpCount > 0 && (
               <div className="space-y-2">
                 {!allPickedUp && (
@@ -527,215 +800,114 @@ export default function RouteView() {
                 </button>
               </div>
             )}
+
+            {/* Pickup phase: show orders as list (need to see all for scanning) */}
+            <div className="space-y-2">
+              {route.orders.map(order => renderOrderCard(order))}
+            </div>
           </div>
         )}
 
-        {/* PHASE 2: Route started - show stats */}
+        {/* PHASE 2: Route started */}
         {routeStarted && (
-          <div className="flex items-center justify-center gap-4 px-3 py-2.5 bg-navy-900 border-b border-navy-800 text-xs text-gray-400 flex-wrap">
-            <div className="flex items-center gap-1">
-              <Clock size={12} className="text-emerald-400" />
-              <span>Ruta iniciada a las {new Date(route.startedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} hs</span>
+          <div className="px-3 pt-3 space-y-3">
+            {/* Stats bar */}
+            <div className="flex items-center justify-center gap-4 py-2 text-xs text-gray-400 flex-wrap">
+              <div className="flex items-center gap-1">
+                <Clock size={12} className="text-emerald-400" />
+                <span>Inicio {new Date(route.startedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} hs</span>
+              </div>
+              {deliveredCount > 0 && (
+                <>
+                  <span className="text-navy-700">|</span>
+                  <div>{routeHours}h {routeMins}m</div>
+                  <span className="text-navy-700">|</span>
+                  <div>~{avgMinutes} min/entrega</div>
+                </>
+              )}
             </div>
-            {deliveredCount > 0 && (
+
+            {/* Route completed summary */}
+            {allDone ? (
+              <div className="bg-navy-900 border border-navy-800 rounded-2xl p-6 text-center space-y-3">
+                <Trophy size={48} className="mx-auto text-emerald-400" />
+                <h2 className="text-xl font-bold text-white">Ruta completada</h2>
+                <div className="text-3xl font-bold text-emerald-400">{deliveredCount}/{totalOrders}</div>
+                <p className="text-sm text-gray-400">pedidos entregados</p>
+                {routeStartTime && (
+                  <div className="text-xs text-gray-500 pt-2 border-t border-navy-800">
+                    Tiempo total: {routeHours}h {routeMins}m
+                    {avgMinutes > 0 && ` — Promedio: ${avgMinutes} min por entrega`}
+                  </div>
+                )}
+                <button
+                  onClick={() => setShowAllOrders(!showAllOrders)}
+                  className="mt-2 flex items-center justify-center gap-1.5 mx-auto text-xs text-brand-400 hover:text-brand-300"
+                >
+                  <List size={14} /> Ver detalle de pedidos
+                </button>
+              </div>
+            ) : (
               <>
-                <span className="text-navy-700">|</span>
-                <div>Tiempo: {routeHours}h {routeMins}m</div>
-                <span className="text-navy-700">|</span>
-                <div>Promedio: {avgMinutes} min</div>
-                <span className="text-navy-700">|</span>
-                <div>Entregas: {deliveredCount}/{totalOrders}</div>
+                {/* Progress indicator */}
+                <div className="bg-navy-900 border border-navy-800 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-white">
+                      Pedido {activeIdx + 1} de {totalOrders}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {processedCount} procesados
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-navy-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-brand-400 transition-all"
+                      style={{ width: `${(processedCount / totalOrders) * 100}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Active order card */}
+                {activeOrder && renderOrderCard(activeOrder)}
+
+                {/* Navigation buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActiveIdx(Math.max(0, activeIdx - 1))}
+                    disabled={activeIdx === 0}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-navy-900 text-gray-400 hover:text-white hover:bg-navy-800 transition-colors text-sm font-medium border border-navy-800 disabled:opacity-30 disabled:hover:text-gray-400 disabled:hover:bg-navy-900"
+                  >
+                    <ChevronLeft size={16} /> Anterior
+                  </button>
+                  <button
+                    onClick={() => setActiveIdx(Math.min(totalOrders - 1, activeIdx + 1))}
+                    disabled={activeIdx === totalOrders - 1}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors text-sm font-medium border border-brand-500/20 disabled:opacity-30 disabled:hover:bg-brand-500/10"
+                  >
+                    Siguiente <ChevronRight size={16} />
+                  </button>
+                </div>
               </>
+            )}
+
+            {/* Toggle full list */}
+            {!allDone && (
+              <button
+                onClick={() => setShowAllOrders(!showAllOrders)}
+                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                <List size={14} /> {showAllOrders ? 'Ocultar lista' : 'Ver todos los pedidos'}
+              </button>
+            )}
+
+            {/* Full orders list (expandable) */}
+            {showAllOrders && (
+              <div className="space-y-1.5 pb-2">
+                {route.orders.map(order => renderOrderCard(order, { compact: true }))}
+              </div>
             )}
           </div>
         )}
-
-        {/* Orders list */}
-        <div className="px-3 pt-3 space-y-2">
-          {route.orders.map((order) => {
-            const isML = order.source === 'MERCADOLIBRE'
-            const needsPickup = ['PENDING', 'ASSIGNED'].includes(order.status)
-            const isPickedUp = order.status === 'PICKED_UP'
-            const isTransit = order.status === 'IN_TRANSIT' || order.status === 'ARRIVED'
-            const isDelivered = order.status === 'DELIVERED'
-            const isUpdating = updatingOrder === order.id
-            const isPickingUpThis = pickingUp === order.id
-
-            // Badge
-            let badgeCfg
-            if (isML) {
-              badgeCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING
-            } else if (needsPickup) {
-              badgeCfg = { label: 'Pendiente de retiro', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' }
-            } else {
-              badgeCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING
-            }
-
-            return (
-              <div key={order.id} className={`rounded-xl border p-3 ${isDelivered ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-navy-900 border-navy-800'}`}>
-                {/* Top row */}
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-500">#{order.routePosition}</span>
-                    <span className="text-[10px] font-mono text-gray-600">{order.orderNumber}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {isML && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
-                        ML
-                      </span>
-                    )}
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeCfg.color}`}>
-                      {badgeCfg.label}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-sm font-semibold text-white mb-1">{order.customerName}</div>
-
-                <div className="text-xs text-gray-400 flex items-start gap-1 mb-0.5">
-                  <MapPin size={12} className="mt-0.5 flex-shrink-0" />
-                  <span>
-                    {order.address}
-                    {order.city ? `, ${order.city}` : ''}
-                    {order.addressDetail ? ` (${order.addressDetail})` : ''}
-                  </span>
-                </div>
-
-                {order.customerPhone && (
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <a href={`tel:${order.customerPhone}`} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-navy-800 text-brand-400 hover:bg-navy-700 transition-colors text-[11px] no-underline border border-navy-700">
-                      <Phone size={11} /> Llamar
-                    </a>
-                    <a
-                      href={`https://wa.me/${order.customerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${order.customerName}, soy tu repartidor de RutaEnvio. Estoy en camino con tu pedido #${order.orderNumber || ''}.`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors text-[11px] no-underline border border-emerald-500/20"
-                    >
-                      <MessageCircle size={11} /> WhatsApp
-                    </a>
-                  </div>
-                )}
-
-                {order.notes && (
-                  <div className="text-xs text-amber-400/70 mt-1.5 bg-amber-500/5 rounded-lg px-2 py-1">
-                    Nota: {order.notes}
-                  </div>
-                )}
-
-                {/* Delivered info */}
-                {isDelivered && (
-                  <div className="mt-2 text-xs text-emerald-400/70 flex items-center gap-1">
-                    <CheckCircle2 size={12} />
-                    <span>Entregado</span>
-                    {order.deliveredAt && (
-                      <span className="text-emerald-400 font-medium ml-1">
-                        {new Date(order.deliveredAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} hs
-                      </span>
-                    )}
-                    {order.receiverName && (
-                      <span className="text-gray-500 ml-1">a {order.receiverName}</span>
-                    )}
-                  </div>
-                )}
-
-                {/* PICKUP PHASE: scan or manual confirm (before route started) - not for ML orders */}
-                {needsPickup && !routeStarted && !isML && (
-                  <div className="flex gap-2 mt-2.5">
-                    <button
-                      onClick={() => openScanner(order)}
-                      disabled={isPickingUpThis}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors text-xs font-medium disabled:opacity-50"
-                    >
-                      {isPickingUpThis ? <Loader2 size={13} className="animate-spin" /> : <ScanLine size={13} />}
-                      Escanear retiro
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`Confirmar retiro manual del pedido #${order.routePosition} de ${order.customerName}?`)) {
-                          confirmPickup(order.id)
-                        }
-                      }}
-                      disabled={isPickingUpThis}
-                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-navy-800 text-amber-400 hover:bg-navy-700 transition-colors text-xs font-medium border border-amber-500/30 disabled:opacity-50"
-                    >
-                      {isPickingUpThis ? <Loader2 size={13} className="animate-spin" /> : <PackageCheck size={13} />}
-                      Retiro manual
-                    </button>
-                  </div>
-                )}
-
-                {/* Picked up but route not started yet */}
-                {isPickedUp && !routeStarted && (
-                  <div className="mt-2 text-xs text-emerald-400/70 flex items-center gap-1">
-                    <PackageCheck size={12} /> Paquete retirado
-                  </div>
-                )}
-
-                {/* Rescheduled info */}
-                {order.status === 'RESCHEDULED' && (
-                  <div className="mt-2 text-xs text-amber-400/70 flex items-center gap-1">
-                    <CalendarClock size={12} />
-                    <span>Reprogramado para manana</span>
-                  </div>
-                )}
-
-                {/* ML orders: only Navigate button (delivery handled by Flex) */}
-                {isML && !isDelivered && order.status !== 'CANCELLED' && order.status !== 'RESCHEDULED' && (
-                  <div className="mt-2.5">
-                    <button
-                      onClick={() => navigateTo(order)}
-                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-navy-800 text-white hover:bg-navy-950 transition-colors text-xs font-medium border border-navy-800"
-                    >
-                      <Navigation size={13} /> Navegar
-                    </button>
-                    <p className="text-[10px] text-gray-600 mt-1.5 text-center">Entrega gestionada por MercadoLibre Flex</p>
-                  </div>
-                )}
-
-                {/* ROUTE PHASE: navigate + deliver + reschedule (after route started) - not for ML */}
-                {routeStarted && !isML && (isPickedUp || isTransit) && (
-                  <div className="space-y-2 mt-2.5">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => navigateTo(order)}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-navy-800 text-white hover:bg-navy-950 transition-colors text-xs font-medium border border-navy-800"
-                      >
-                        <Navigation size={13} /> Navegar
-                      </button>
-                      {isPickedUp && (
-                        <button
-                          onClick={() => markInTransit(order.id)}
-                          disabled={isUpdating}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-xs font-medium disabled:opacity-50"
-                        >
-                          {isUpdating ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
-                          En camino
-                        </button>
-                      )}
-                      {isTransit && (
-                        <button
-                          onClick={() => openDeliverModal(order)}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors text-xs font-medium"
-                        >
-                          <CheckCircle2 size={13} /> Entregar
-                        </button>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => rescheduleOrder(order)}
-                      disabled={isUpdating}
-                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors text-xs font-medium border border-amber-500/20 disabled:opacity-50"
-                    >
-                      <CalendarClock size={13} /> Reprogramar para manana
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
 
         {/* Footer */}
         <div className="text-center text-xs text-gray-700 mt-6 pb-4">
