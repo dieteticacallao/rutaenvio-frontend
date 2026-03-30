@@ -415,9 +415,11 @@ export default function RouteView() {
   const routeDate = route.date ? new Date(route.date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
   const routeStarted = !!route.startedAt
 
-  // Pickup phase: all orders that still need pickup
-  const pendingPickup = route.orders.filter(o => ['PENDING', 'ASSIGNED'].includes(o.status))
-  const pickedUpCount = route.orders.filter(o => !['PENDING', 'ASSIGNED'].includes(o.status)).length
+  // Pickup phase: all orders that still need pickup (ML orders excluded - no manual pickup)
+  const manualOrders = route.orders.filter(o => o.source !== 'MERCADOLIBRE')
+  const pendingPickup = manualOrders.filter(o => ['PENDING', 'ASSIGNED'].includes(o.status))
+  const pickedUpCount = manualOrders.filter(o => !['PENDING', 'ASSIGNED'].includes(o.status)).length
+  const manualTotal = manualOrders.length
   const allPickedUp = pendingPickup.length === 0
 
   // Stats
@@ -472,12 +474,12 @@ export default function RouteView() {
             <div className="bg-navy-900 border border-navy-800 rounded-xl p-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-white">Retiro de paquetes</span>
-                <span className="text-xs text-gray-400">{pickedUpCount}/{totalOrders} retirados</span>
+                <span className="text-xs text-gray-400">{pickedUpCount}/{manualTotal} retirados</span>
               </div>
               <div className="w-full h-2 bg-navy-800 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${allPickedUp ? 'bg-emerald-400' : 'bg-amber-400'}`}
-                  style={{ width: `${totalOrders > 0 ? (pickedUpCount / totalOrders) * 100 : 0}%` }}
+                  style={{ width: `${manualTotal > 0 ? (pickedUpCount / manualTotal) * 100 : 0}%` }}
                 />
               </div>
             </div>
@@ -551,6 +553,7 @@ export default function RouteView() {
         {/* Orders list */}
         <div className="px-3 pt-3 space-y-2">
           {route.orders.map((order) => {
+            const isML = order.source === 'MERCADOLIBRE'
             const needsPickup = ['PENDING', 'ASSIGNED'].includes(order.status)
             const isPickedUp = order.status === 'PICKED_UP'
             const isTransit = order.status === 'IN_TRANSIT' || order.status === 'ARRIVED'
@@ -560,7 +563,9 @@ export default function RouteView() {
 
             // Badge
             let badgeCfg
-            if (needsPickup) {
+            if (isML) {
+              badgeCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING
+            } else if (needsPickup) {
               badgeCfg = { label: 'Pendiente de retiro', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' }
             } else {
               badgeCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING
@@ -574,9 +579,16 @@ export default function RouteView() {
                     <span className="text-xs font-bold text-gray-500">#{order.routePosition}</span>
                     <span className="text-[10px] font-mono text-gray-600">{order.orderNumber}</span>
                   </div>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeCfg.color}`}>
-                    {badgeCfg.label}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {isML && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                        ML
+                      </span>
+                    )}
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeCfg.color}`}>
+                      {badgeCfg.label}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="text-sm font-semibold text-white mb-1">{order.customerName}</div>
@@ -628,8 +640,8 @@ export default function RouteView() {
                   </div>
                 )}
 
-                {/* PICKUP PHASE: scan or manual confirm (before route started) */}
-                {needsPickup && !routeStarted && (
+                {/* PICKUP PHASE: scan or manual confirm (before route started) - not for ML orders */}
+                {needsPickup && !routeStarted && !isML && (
                   <div className="flex gap-2 mt-2.5">
                     <button
                       onClick={() => openScanner(order)}
@@ -669,8 +681,21 @@ export default function RouteView() {
                   </div>
                 )}
 
-                {/* ROUTE PHASE: navigate + deliver + reschedule (after route started) */}
-                {routeStarted && (isPickedUp || isTransit) && (
+                {/* ML orders: only Navigate button (delivery handled by Flex) */}
+                {isML && !isDelivered && order.status !== 'CANCELLED' && order.status !== 'RESCHEDULED' && (
+                  <div className="mt-2.5">
+                    <button
+                      onClick={() => navigateTo(order)}
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-navy-800 text-white hover:bg-navy-950 transition-colors text-xs font-medium border border-navy-800"
+                    >
+                      <Navigation size={13} /> Navegar
+                    </button>
+                    <p className="text-[10px] text-gray-600 mt-1.5 text-center">Entrega gestionada por MercadoLibre Flex</p>
+                  </div>
+                )}
+
+                {/* ROUTE PHASE: navigate + deliver + reschedule (after route started) - not for ML */}
+                {routeStarted && !isML && (isPickedUp || isTransit) && (
                   <div className="space-y-2 mt-2.5">
                     <div className="flex gap-2">
                       <button
