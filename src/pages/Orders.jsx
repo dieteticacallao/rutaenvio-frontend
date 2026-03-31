@@ -418,6 +418,7 @@ export default function Orders() {
             <tr className="border-b border-navy-800 text-xs text-gray-500 uppercase tracking-wider">
               <th className="text-left p-3 pl-4">Pedido</th>
               <th className="text-left p-3">Cliente</th>
+              <th className="text-left p-3">Usuario ML</th>
               <th className="text-left p-3">Direccion</th>
               <th className="text-left p-3">Fecha</th>
               <th className="text-left p-3">Estado</th>
@@ -427,10 +428,14 @@ export default function Orders() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="p-8 text-center text-gray-500"><Loader2 size={24} className="animate-spin inline-block mr-2" />Cargando pedidos...</td></tr>
+              <tr><td colSpan={8} className="p-8 text-center text-gray-500"><Loader2 size={24} className="animate-spin inline-block mr-2" />Cargando pedidos...</td></tr>
             ) : filteredOrders.length === 0 ? (
-              <tr><td colSpan={7} className="p-8 text-center text-gray-500">{orders.length === 0 ? 'No hay pedidos. Importa de Tiendanube o crea uno manual.' : 'No se encontraron pedidos con esos filtros.'}</td></tr>
-            ) : filteredOrders.map(order => (
+              <tr><td colSpan={8} className="p-8 text-center text-gray-500">{orders.length === 0 ? 'No hay pedidos. Importa de Tiendanube o crea uno manual.' : 'No se encontraron pedidos con esos filtros.'}</td></tr>
+            ) : filteredOrders.map(order => {
+              const mlMatch = order.source === 'MERCADOLIBRE' && order.customerName?.match(/^(.+?)\s*\(([^)]+)\)\s*$/)
+              const displayName = mlMatch ? mlMatch[1] : order.customerName
+              const mlNickname = mlMatch ? mlMatch[2] : null
+              return (
               <tr key={order.id} className="table-row">
                 <td className="p-3 pl-4">
                   <div className="flex items-center gap-1.5">
@@ -442,8 +447,11 @@ export default function Orders() {
                   </div>
                 </td>
                 <td className="p-3">
-                  <div className="text-gray-200">{order.customerName}</div>
+                  <div className="text-gray-200">{displayName}</div>
                   {order.customerPhone && !/X{4,}/i.test(order.customerPhone) && <div className="text-xs text-gray-500">{order.customerPhone}</div>}
+                </td>
+                <td className="p-3 text-xs text-gray-400">
+                  {mlNickname || '—'}
                 </td>
                 <td className="p-3">
                   <div className="text-gray-300 max-w-[200px] truncate">{order.address}</div>
@@ -479,7 +487,8 @@ export default function Orders() {
                   </button>
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
