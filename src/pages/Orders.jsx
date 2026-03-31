@@ -22,6 +22,7 @@ export default function Orders() {
   const [tnConnected, setTnConnected] = useState(false)
   const [mlConnected, setMlConnected] = useState(false)
   const [importDropdown, setImportDropdown] = useState(false)
+  const [syncingML, setSyncingML] = useState(false)
   const importDropdownRef = useRef(null)
 
   // Close dropdown on outside click
@@ -113,6 +114,24 @@ export default function Orders() {
     setShowMLModal(true)
   }
 
+  const handleMLSync = async () => {
+    setSyncingML(true)
+    try {
+      const { data } = await api.post('/mercadolibre/sync-all')
+      if (data.success) {
+        const { updated, errors } = data.data
+        toast.success(`Sincronizado: ${updated} pedido${updated !== 1 ? 's' : ''} actualizado${updated !== 1 ? 's' : ''}${errors > 0 ? ` (${errors} error${errors !== 1 ? 'es' : ''})` : ''}`)
+        loadOrders()
+      } else {
+        toast.error(data.error || 'Error al sincronizar')
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al sincronizar con MercadoLibre')
+    } finally {
+      setSyncingML(false)
+    }
+  }
+
   // Client-side filtering
   const safeOrders = Array.isArray(orders) ? orders : []
   const filteredOrders = safeOrders.filter(order => {
@@ -185,6 +204,12 @@ export default function Orders() {
               </div>
             )}
           </div>
+          {mlConnected && (
+            <button onClick={handleMLSync} disabled={syncingML} className="btn-secondary">
+              {syncingML ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+              Sincronizar ML
+            </button>
+          )}
           <button onClick={() => setShowCreate(true)} className="btn-primary">
             <Plus size={16} /> Nuevo pedido
           </button>
