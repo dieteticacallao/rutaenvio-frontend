@@ -5,30 +5,29 @@ import { Truck, ArrowRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Login() {
-  const [mode, setMode] = useState('login') // login | register
   const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState({ email: '', password: '', name: '', businessName: '', phone: '' })
-  const { login, register } = useAuth()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const { login } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     try {
-      if (mode === 'login') {
-        await login(form.email, form.password)
+      const data = await login(email, password)
+      const role = data.user?.role
+      if (role === 'STORE_ADMIN') {
+        navigate('/') // por ahora al dashboard, despues /tienda
       } else {
-        await register(form)
+        navigate('/')
       }
-      navigate('/')
-      toast.success(mode === 'login' ? 'Bienvenido!' : 'Cuenta creada!')
+      toast.success('Bienvenido!')
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Error al iniciar sesión')
+      toast.error(err.response?.data?.error || 'Credenciales incorrectas')
     }
     setLoading(false)
   }
-
-  const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }))
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -38,42 +37,24 @@ export default function Login() {
             <Truck size={28} className="text-white" />
           </div>
           <h1 className="text-2xl font-bold text-white">RutaEnvio</h1>
-          <p className="text-gray-500 text-sm mt-1">Gestión inteligente de delivery</p>
+          <p className="text-gray-500 text-sm mt-1">Gestion inteligente de delivery</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card-p space-y-4">
-          <h2 className="text-lg font-semibold text-white">
-            {mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
-          </h2>
-
-          {mode === 'register' && <>
-            <div>
-              <label className="label">Nombre de tu negocio</label>
-              <input className="input" placeholder="Mi Tienda" value={form.businessName} onChange={set('businessName')} required />
-            </div>
-            <div>
-              <label className="label">Tu nombre</label>
-              <input className="input" placeholder="Juan Pérez" value={form.name} onChange={set('name')} required />
-            </div>
-          </>}
+          <h2 className="text-lg font-semibold text-white">Iniciar sesion</h2>
 
           <div>
-            <label className="label">Email</label>
-            <input className="input" type="email" placeholder="tu@email.com" value={form.email} onChange={set('email')} required />
+            <label className="label">Email *</label>
+            <input className="input" type="email" placeholder="tu@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
           </div>
           <div>
-            <label className="label">Contraseña</label>
-            <input className="input" type="password" placeholder="••••••••" value={form.password} onChange={set('password')} required />
+            <label className="label">Contrasena *</label>
+            <input className="input" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
           </div>
 
           <button type="submit" disabled={loading} className="btn-primary w-full justify-center">
-            {loading ? 'Cargando...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
-            <ArrowRight size={16} />
-          </button>
-
-          <button type="button" onClick={() => setMode(m => m === 'login' ? 'register' : 'login')}
-            className="text-sm text-gray-500 hover:text-brand-400 w-full text-center transition-colors">
-            {mode === 'login' ? '¿No tenés cuenta? Registrate' : '¿Ya tenés cuenta? Iniciá sesión'}
+            {loading ? 'Ingresando...' : 'Entrar'}
+            {!loading && <ArrowRight size={16} />}
           </button>
         </form>
       </div>

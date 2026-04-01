@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../lib/store'
+import { useAuth, getRoleLabel } from '../lib/store'
 import { LayoutDashboard, Package, Route, Users, Settings, LogOut, Truck, Clock, ChevronDown, BarChart3, Receipt } from 'lucide-react'
 
 const mainLinks = [
@@ -14,7 +14,7 @@ const bottomLinks = [
 ]
 
 export default function Layout({ children }) {
-  const { business, logout } = useAuth()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -128,7 +128,8 @@ export default function Layout({ children }) {
         </nav>
 
         <div className="p-3 border-t border-navy-800">
-          <div className="px-3 py-2 text-xs text-gray-500 truncate">{business?.name}</div>
+          <div className="px-3 py-2 text-xs text-gray-500 truncate">{user?.companyName}</div>
+          <div className="px-3 py-1 text-[10px] text-gray-600 truncate">{getRoleLabel(user?.role)}</div>
           <button onClick={() => { logout(); navigate('/login') }}
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-500 hover:text-red-400 hover:bg-red-500/5 w-full transition-colors">
             <LogOut size={16} /> Cerrar sesion

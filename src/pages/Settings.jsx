@@ -5,7 +5,7 @@ import { Settings as SettingsIcon, Store, MessageCircle, Link2, Check, AlertCirc
 import toast from 'react-hot-toast'
 
 export default function Settings() {
-  const { business } = useAuth()
+  const { user } = useAuth()
   const [settings, setSettings] = useState(null)
   const [loading, setLoading] = useState(true)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -479,13 +479,13 @@ function LocationsSection() {
 }
 
 function TiendanubeSection({ settings, onSettingsUpdate }) {
-  const { business } = useAuth()
+  const { user } = useAuth()
   const tnStoreId = settings?.tnStoreId
   const [disconnecting, setDisconnecting] = useState(false)
 
   const handleConnect = () => {
     const apiUrl = (import.meta.env.VITE_API_URL || '/api').replace('/api', '')
-    window.location.href = apiUrl + '/api/tiendanube/install?businessId=' + business.id
+    window.location.href = apiUrl + '/api/tiendanube/install?businessId=' + user.companyId
   }
 
   const handleDisconnect = async () => {

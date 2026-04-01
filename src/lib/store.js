@@ -3,7 +3,7 @@ import { create } from 'zustand';
 
 // === API Client ===
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://rutaenvio-backend-production.up.railway.app/api',
   headers: { 'Content-Type': 'application/json' }
 });
 
@@ -18,46 +18,58 @@ api.interceptors.response.use(
   err => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
       window.location.href = '/login';
     }
     return Promise.reject(err);
   }
 );
 
+// === Helpers ===
+const savedUser = () => {
+  try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
+};
+
+const ROLE_LABELS = {
+  SUPER_ADMIN: 'Super Admin',
+  LOGISTICS_ADMIN: 'Admin Logistica',
+  STORE_ADMIN: 'Admin Tienda',
+};
+
+export const getRoleLabel = (role) => ROLE_LABELS[role] || role;
+
 // === Auth Store ===
 export const useAuth = create((set) => ({
-  user: null,
-  business: null,
+  user: savedUser(),
   token: localStorage.getItem('token'),
   isAuthenticated: !!localStorage.getItem('token'),
 
   login: async (email, password) => {
-    const { data } = await api.post('/auth/login', { email, password });
-    localStorage.setItem('token', data.token);
-    set({ user: data.user, business: data.business, token: data.token, isAuthenticated: true });
-    return data;
-  },
-
-  register: async (formData) => {
-    const { data } = await api.post('/auth/register', formData);
-    localStorage.setItem('token', data.token);
-    set({ user: data.user, business: data.business, token: data.token, isAuthenticated: true });
-    return data;
+    const res = await api.post('/auth/login', { email, password });
+    const { token, user } = res.data.data;
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    set({ user, token, isAuthenticated: true });
+    return { token, user };
   },
 
   loadUser: async () => {
     try {
-      const { data } = await api.get('/auth/me');
-      set({ user: data.user, business: data.business, isAuthenticated: true });
+      const res = await api.get('/auth/me');
+      const { user } = res.data.data;
+      localStorage.setItem('user', JSON.stringify(user));
+      set({ user, isAuthenticated: true });
     } catch {
-      set({ user: null, business: null, isAuthenticated: false });
+      set({ user: null, isAuthenticated: false });
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
     }
   },
 
   logout: () => {
     localStorage.removeItem('token');
-    set({ user: null, business: null, token: null, isAuthenticated: false });
+    localStorage.removeItem('user');
+    set({ user: null, token: null, isAuthenticated: false });
   }
 }));
 
