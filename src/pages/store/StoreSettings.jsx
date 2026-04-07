@@ -5,31 +5,36 @@ import { Link2, Check, AlertCircle, Unplug, Loader2, ShoppingBag, MessageCircle,
 import toast from 'react-hot-toast'
 
 export default function StoreSettings() {
-  const [settings, setSettings] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [searchParams, setSearchParams] = useSearchParams()
-
-  const reload = () => api.get('/dashboard/settings').then(r => setSettings(r.data))
-
-  useEffect(() => {
-    api.get('/dashboard/settings').then(r => { setSettings(r.data); setLoading(false) }).catch(() => setLoading(false))
-  }, [])
+  const [tnRefreshKey, setTnRefreshKey] = useState(0)
+  const [mlRefreshKey, setMlRefreshKey] = useState(0)
 
   useEffect(() => {
-    if (searchParams.get('tn') === 'success') {
+    const tnParam = searchParams.get('tn')
+    if (tnParam === 'success') {
       toast.success('Tiendanube conectada correctamente')
+      setTnRefreshKey(k => k + 1)
       searchParams.delete('tn')
       setSearchParams(searchParams, { replace: true })
-      reload()
+    } else if (tnParam === 'error') {
+      const reason = searchParams.get('reason')
+      toast.error(`Error al conectar Tiendanube${reason ? ': ' + reason : ''}`)
+      searchParams.delete('tn')
+      searchParams.delete('reason')
+      setSearchParams(searchParams, { replace: true })
     }
-    if (searchParams.get('ml') === 'connected') {
+    const mlParam = searchParams.get('ml')
+    if (mlParam === 'connected' || mlParam === 'success') {
       toast.success('MercadoLibre conectado correctamente')
+      setMlRefreshKey(k => k + 1)
+      searchParams.delete('ml')
+      setSearchParams(searchParams, { replace: true })
+    } else if (mlParam === 'error') {
+      toast.error('Error al conectar MercadoLibre')
       searchParams.delete('ml')
       setSearchParams(searchParams, { replace: true })
     }
   }, [searchParams, setSearchParams])
-
-  if (loading) return <div className="flex items-center justify-center h-96 text-gray-500">Cargando...</div>
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -38,18 +43,28 @@ export default function StoreSettings() {
         <p className="text-sm text-gray-500">Integraciones de tu tienda</p>
       </div>
 
-      <TiendanubeSection settings={settings} onSettingsUpdate={reload} />
-      <MercadoLibreSection />
+      <TiendanubeSection refreshKey={tnRefreshKey} />
+      <MercadoLibreSection refreshKey={mlRefreshKey} />
       <MyLogisticsSection />
       <WhatsAppComingSoonSection />
     </div>
   )
 }
 
-function TiendanubeSection({ settings, onSettingsUpdate }) {
+function TiendanubeSection({ refreshKey }) {
   const { user } = useAuth()
-  const tnStoreId = settings?.tnStoreId
+  const [status, setStatus] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [disconnecting, setDisconnecting] = useState(false)
+
+  const loadStatus = () => {
+    setLoading(true)
+    api.get('/tiendanube/status')
+      .then(r => { setStatus(r.data?.data || { connected: false }); setLoading(false) })
+      .catch(() => { setStatus({ connected: false }); setLoading(false) })
+  }
+
+  useEffect(() => { loadStatus() }, [refreshKey])
 
   const handleConnect = () => {
     const apiUrl = (import.meta.env.VITE_API_URL || '/api').replace('/api', '')
@@ -61,12 +76,14 @@ function TiendanubeSection({ settings, onSettingsUpdate }) {
     try {
       await api.post('/dashboard/settings/tiendanube/disconnect')
       toast.success('Tiendanube desconectada')
-      onSettingsUpdate()
+      loadStatus()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al desconectar')
     }
     setDisconnecting(false)
   }
+
+  const connected = status?.connected
 
   return (
     <div className="card-p space-y-3">
@@ -74,52 +91,49 @@ function TiendanubeSection({ settings, onSettingsUpdate }) {
         <h3 className="font-semibold text-white flex items-center gap-2">
           <Link2 size={18} /> Tiendanube
         </h3>
-        {tnStoreId ? (
+        {loading ? (
+          <Loader2 size={16} className="animate-spin text-gray-500" />
+        ) : connected ? (
           <span className="badge bg-emerald-500/10 text-emerald-400"><Check size={12} /> Conectada</span>
         ) : (
           <span className="badge bg-amber-500/10 text-amber-400"><AlertCircle size={12} /> No conectada</span>
         )}
       </div>
 
-      {tnStoreId ? (
+      {!loading && connected ? (
         <>
           <p className="text-sm text-gray-500">
-            Tienda conectada (Store ID: {tnStoreId}). Las ordenes pagadas se importan automaticamente via webhook.
+            Tienda conectada{status?.storeName ? `: ${status.storeName}` : ''}{status?.storeId ? ` (Store ID: ${status.storeId})` : ''}. Las ordenes pagadas se importan automaticamente via webhook.
           </p>
           <button onClick={handleDisconnect} disabled={disconnecting} className="btn-secondary text-red-400 hover:text-red-300">
             <Unplug size={16} /> {disconnecting ? 'Desconectando...' : 'Desconectar'}
           </button>
         </>
-      ) : (
+      ) : !loading ? (
         <>
           <p className="text-sm text-gray-500">
             Conecta tu Tiendanube para importar pedidos automaticamente.
           </p>
           <button onClick={handleConnect} className="btn-secondary">Conectar Tiendanube</button>
         </>
-      )}
+      ) : null}
     </div>
   )
 }
 
-function MercadoLibreSection() {
+function MercadoLibreSection({ refreshKey }) {
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [disconnecting, setDisconnecting] = useState(false)
 
   const loadStatus = () => {
     setLoading(true)
-    const baseUrl = import.meta.env.VITE_API_URL || '/api'
-    const token = localStorage.getItem('token')
-    fetch(baseUrl + '/mercadolibre/status', {
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
-    })
-      .then(r => r.ok ? r.json() : Promise.reject(r))
-      .then(res => { setStatus(res?.data || res || {}); setLoading(false) })
+    api.get('/mercadolibre/status')
+      .then(r => { setStatus(r.data?.data || r.data || { connected: false }); setLoading(false) })
       .catch(() => { setStatus({ connected: false }); setLoading(false) })
   }
 
-  useEffect(() => { loadStatus() }, [])
+  useEffect(() => { loadStatus() }, [refreshKey])
 
   const handleConnect = () => {
     const apiUrl = (import.meta.env.VITE_API_URL || '/api').replace('/api', '')
