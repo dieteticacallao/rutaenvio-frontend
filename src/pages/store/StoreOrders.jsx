@@ -26,6 +26,7 @@ export default function StoreOrders() {
   const importDropdownRef = useRef(null)
 
   const [selected, setSelected] = useState(new Set())
+  const [showAssignModal, setShowAssignModal] = useState(false)
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -209,11 +210,11 @@ export default function StoreOrders() {
           ))}
         </div>
         <button
-          disabled
-          title="Próximamente"
-          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-500/10 text-teal-400/60 cursor-not-allowed"
+          onClick={() => setShowAssignModal(true)}
+          disabled={selected.size === 0}
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-500 text-white hover:bg-teal-600 transition-colors disabled:bg-teal-500/10 disabled:text-teal-400/60 disabled:cursor-not-allowed"
         >
-          <Truck size={14} /> Asignar a logistica {selected.size > 0 && `(${selected.size})`}
+          <Truck size={14} /> Asignar {selected.size > 0 ? `${selected.size} pedido${selected.size !== 1 ? 's' : ''}` : 'a logistica'}
         </button>
       </div>
 
@@ -267,7 +268,7 @@ export default function StoreOrders() {
             ) : filteredOrders.map(order => {
               const canSelect = !order.logisticId
               return (
-                <tr key={order.id} className="table-row">
+                <tr key={order.id} className={`table-row ${!canSelect ? 'opacity-60' : ''}`}>
                   <td className="p-3 pl-4">
                     <input
                       type="checkbox"
@@ -342,6 +343,114 @@ export default function StoreOrders() {
       {showExcelModal && <ExcelImportModal onClose={() => setShowExcelModal(false)} onImported={loadOrders} />}
       {showTNModal && <TNImportModal onClose={() => setShowTNModal(false)} onImported={loadOrders} />}
       {showMLModal && <MLImportModal onClose={() => setShowMLModal(false)} onImported={loadOrders} />}
+      {showAssignModal && (
+        <AssignLogisticsModal
+          orders={safeOrders.filter(o => selected.has(o.id))}
+          onClose={() => setShowAssignModal(false)}
+          onAssigned={() => {
+            setSelected(new Set())
+            setShowAssignModal(false)
+            loadOrders()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function AssignLogisticsModal({ orders, onClose, onAssigned }) {
+  const [logistics, setLogistics] = useState([])
+  const [loadingLogistics, setLoadingLogistics] = useState(true)
+  const [logisticId, setLogisticId] = useState('')
+  const [assigning, setAssigning] = useState(false)
+
+  useEffect(() => {
+    api.get('/companies/my-logistics').then(r => {
+      const list = r.data?.data || []
+      setLogistics(list)
+      if (list.length === 1) setLogisticId(list[0].id)
+      setLoadingLogistics(false)
+    }).catch(() => { setLogistics([]); setLoadingLogistics(false) })
+  }, [])
+
+  const handleConfirm = async () => {
+    if (!logisticId) {
+      toast.error('Seleccioná una logística')
+      return
+    }
+    setAssigning(true)
+    try {
+      const orderIds = orders.map(o => o.id)
+      const { data } = await api.post('/orders/assign-logistics', { orderIds, logisticId })
+      const count = data?.data?.assigned ?? orderIds.length
+      const logisticName = data?.data?.logistic?.name || logistics.find(l => l.id === logisticId)?.name || 'logística'
+      toast.success(`${count} pedido${count !== 1 ? 's' : ''} asignado${count !== 1 ? 's' : ''} a ${logisticName}`)
+      onAssigned()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al asignar')
+    }
+    setAssigning(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="card-p w-full max-w-lg space-y-4 max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <Truck size={18} className="text-teal-400" /> Asignar pedidos a logística
+          </h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block">Logística *</label>
+          {loadingLogistics ? (
+            <div className="text-sm text-gray-500 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Cargando logísticas...</div>
+          ) : logistics.length === 0 ? (
+            <div className="text-sm text-amber-400">No tenés logísticas vinculadas. Configurá una en Config.</div>
+          ) : (
+            <select
+              value={logisticId}
+              onChange={e => setLogisticId(e.target.value)}
+              className="input w-full"
+            >
+              <option value="">Seleccioná una logística</option>
+              {logistics.map(l => (
+                <option key={l.id} value={l.id}>{l.name}{l.isExternal ? ' (externa)' : ''}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto border border-navy-800 rounded-lg">
+          <div className="px-3 py-2 text-xs text-gray-500 uppercase tracking-wider bg-navy-900 sticky top-0 border-b border-navy-800">
+            {orders.length} pedido{orders.length !== 1 ? 's' : ''} a asignar
+          </div>
+          <div className="divide-y divide-navy-800/50">
+            {orders.map(o => (
+              <div key={o.id} className="px-3 py-2 text-sm">
+                <div className="text-gray-200 font-medium">{o.customerName}</div>
+                <div className="text-xs text-gray-500 truncate">{o.address}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-2 justify-end pt-2 border-t border-navy-800">
+          <button onClick={onClose} className="btn-secondary" disabled={assigning}>Cancelar</button>
+          <button
+            onClick={handleConfirm}
+            disabled={assigning || !logisticId || logistics.length === 0}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm bg-teal-500 text-white hover:bg-teal-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {assigning ? (
+              <><Loader2 size={14} className="animate-spin" /> Asignando...</>
+            ) : (
+              <>Confirmar asignación</>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
