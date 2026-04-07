@@ -1,8 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP } from '../../lib/store'
-import { Package, Search, X, MapPin, Loader2, Truck, Eye } from 'lucide-react'
+import { Package, Plus, Download, Search, X, MapPin, Loader2, Truck, Eye, FileSpreadsheet, ChevronDown, Cloud, ShoppingBag, ShoppingCart } from 'lucide-react'
 import toast from 'react-hot-toast'
+import OrderModal from '../../components/shared/OrderModal'
+import ExcelImportModal from '../../components/shared/ExcelImportModal'
+import MLImportModal from '../../components/shared/MLImportModal'
+import TNImportModal from '../../components/shared/TNImportModal'
 
 export default function StoreOrders() {
   const navigate = useNavigate()
@@ -11,6 +15,41 @@ export default function StoreOrders() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState({ status: '', page: 1 })
   const [searchQuery, setSearchQuery] = useState('')
+
+  const [showCreate, setShowCreate] = useState(false)
+  const [showExcelModal, setShowExcelModal] = useState(false)
+  const [showTNModal, setShowTNModal] = useState(false)
+  const [showMLModal, setShowMLModal] = useState(false)
+  const [tnConnected, setTnConnected] = useState(false)
+  const [mlConnected, setMlConnected] = useState(false)
+  const [importDropdown, setImportDropdown] = useState(false)
+  const importDropdownRef = useRef(null)
+
+  const [selected, setSelected] = useState(new Set())
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (importDropdownRef.current && !importDropdownRef.current.contains(e.target)) {
+        setImportDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  useEffect(() => {
+    api.get('/dashboard/settings').then(r => {
+      setTnConnected(!!r.data?.tnStoreId)
+    }).catch(() => {})
+    const mlBaseUrl = import.meta.env.VITE_API_URL || '/api'
+    const mlToken = localStorage.getItem('token')
+    fetch(mlBaseUrl + '/mercadolibre/status', {
+      headers: { 'Authorization': 'Bearer ' + mlToken, 'Content-Type': 'application/json' }
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then(res => setMlConnected(!!res?.data?.connected || !!res?.connected))
+      .catch(() => {})
+  }, [])
 
   const loadOrders = useCallback(() => {
     setLoading(true)
@@ -25,14 +64,44 @@ export default function StoreOrders() {
       const list = Array.isArray(d) ? d : Array.isArray(d?.orders) ? d.orders : []
       setOrders(list)
       setTotal(d?.total ?? list.length)
+      setSelected(new Set())
       setLoading(false)
     }).catch(() => { setOrders([]); setLoading(false) })
   }, [filter])
 
   useEffect(() => { loadOrders() }, [loadOrders])
 
-  const handleAssignPlaceholder = (order) => {
-    toast('Asignar a logistica - proximamente', { icon: 'ℹ️' })
+  const handleOrderSaved = (savedOrder, isEdit) => {
+    if (isEdit) {
+      setOrders(prev => prev.map(o => o.id === savedOrder.id ? { ...o, ...savedOrder } : o))
+    } else {
+      loadOrders()
+    }
+  }
+
+  const handleTNImport = () => {
+    if (!tnConnected) {
+      toast.error('Primero conecta Tiendanube en Configuracion')
+      return
+    }
+    setShowTNModal(true)
+  }
+
+  const handleMLImport = () => {
+    if (!mlConnected) {
+      toast.error('Primero conecta MercadoLibre en Configuracion')
+      return
+    }
+    setShowMLModal(true)
+  }
+
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const safeOrders = Array.isArray(orders) ? orders : []
@@ -45,6 +114,13 @@ export default function StoreOrders() {
     return true
   })
 
+  const selectableOrders = filteredOrders.filter(o => !o.logisticId)
+  const allSelected = selectableOrders.length > 0 && selectableOrders.every(o => selected.has(o.id))
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set())
+    else setSelected(new Set(selectableOrders.map(o => o.id)))
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -54,24 +130,79 @@ export default function StoreOrders() {
           </h1>
           <p className="text-sm text-gray-500">{total} total</p>
         </div>
+        <div className="flex gap-2">
+          <button onClick={() => setShowExcelModal(true)} className="btn-secondary">
+            <FileSpreadsheet size={16} /> Importar Excel
+          </button>
+          <div className="relative" ref={importDropdownRef}>
+            <button onClick={() => setImportDropdown(v => !v)} className="btn-secondary">
+              <Download size={16} /> Importar <ChevronDown size={14} />
+            </button>
+            {importDropdown && (
+              <div className="absolute right-0 top-full mt-1.5 w-56 bg-navy-900 border border-navy-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                <button
+                  onClick={() => { setImportDropdown(false); handleTNImport() }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white hover:bg-navy-800 transition-colors text-left"
+                >
+                  <Cloud size={16} className="text-purple-400" />
+                  <span>Tiendanube</span>
+                  {tnConnected && <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">Conectada</span>}
+                </button>
+                {mlConnected ? (
+                  <button
+                    onClick={() => { setImportDropdown(false); handleMLImport() }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white hover:bg-navy-800 transition-colors text-left"
+                  >
+                    <ShoppingBag size={16} className="text-yellow-400" />
+                    <span>MercadoLibre</span>
+                    <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">Conectada</span>
+                  </button>
+                ) : (
+                  <button disabled className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-600 cursor-not-allowed text-left">
+                    <ShoppingBag size={16} />
+                    <span>MercadoLibre</span>
+                    <span className="ml-auto text-[9px] text-gray-600">Proximamente</span>
+                  </button>
+                )}
+                <button disabled className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-600 cursor-not-allowed text-left">
+                  <ShoppingCart size={16} />
+                  <span>Shopify</span>
+                  <span className="ml-auto text-[9px] text-gray-600">Proximamente</span>
+                </button>
+              </div>
+            )}
+          </div>
+          <button onClick={() => setShowCreate(true)} className="btn-primary">
+            <Plus size={16} /> Nuevo pedido
+          </button>
+        </div>
       </div>
 
-      {/* Status filters */}
-      <div className="flex gap-1.5 flex-wrap">
-        {[
-          { value: '', label: 'Todos' },
-          { value: 'PENDING', label: 'Pendientes' },
-          { value: 'EN_RUTA', label: 'En ruta' },
-          { value: 'DELIVERED', label: 'Entregados' },
-          { value: 'CANCELLED', label: 'Cancelados' },
-        ].map(s => (
-          <button key={s.value} onClick={() => setFilter(f => ({ ...f, status: s.value, page: 1 }))}
-            className={`text-xs px-3 py-1.5 rounded-full transition-all duration-200 ${
-              filter.status === s.value ? 'bg-teal-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white'
-            }`}>
-            {s.label}
-          </button>
-        ))}
+      {/* Assign bar */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex gap-1.5 flex-wrap">
+          {[
+            { value: '', label: 'Todos' },
+            { value: 'PENDING', label: 'Pendientes' },
+            { value: 'EN_RUTA', label: 'En ruta' },
+            { value: 'DELIVERED', label: 'Entregados' },
+            { value: 'CANCELLED', label: 'Cancelados' },
+          ].map(s => (
+            <button key={s.value} onClick={() => setFilter(f => ({ ...f, status: s.value, page: 1 }))}
+              className={`text-xs px-3 py-1.5 rounded-full transition-all duration-200 ${
+                filter.status === s.value ? 'bg-teal-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white'
+              }`}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <button
+          disabled
+          title="Próximamente"
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-500/10 text-teal-400/60 cursor-not-allowed"
+        >
+          <Truck size={14} /> Asignar a logistica {selected.size > 0 && `(${selected.size})`}
+        </button>
       </div>
 
       {/* Search */}
@@ -98,7 +229,16 @@ export default function StoreOrders() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-navy-800 text-xs text-gray-500 uppercase tracking-wider">
-              <th className="text-left p-3 pl-4">Pedido</th>
+              <th className="p-3 pl-4 w-8">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  disabled={selectableOrders.length === 0}
+                  className="rounded border-navy-700 bg-navy-900 text-teal-500"
+                />
+              </th>
+              <th className="text-left p-3">Pedido</th>
               <th className="text-left p-3">Cliente</th>
               <th className="text-left p-3">Direccion</th>
               <th className="text-left p-3">Fecha</th>
@@ -109,55 +249,64 @@ export default function StoreOrders() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="p-8 text-center text-gray-500"><Loader2 size={24} className="animate-spin inline-block mr-2" />Cargando pedidos...</td></tr>
+              <tr><td colSpan={8} className="p-8 text-center text-gray-500"><Loader2 size={24} className="animate-spin inline-block mr-2" />Cargando pedidos...</td></tr>
             ) : filteredOrders.length === 0 ? (
-              <tr><td colSpan={7} className="p-8 text-center text-gray-500">{orders.length === 0 ? 'No hay pedidos. Importá desde Tiendanube, MercadoLibre o Excel.' : 'No se encontraron pedidos con esos filtros.'}</td></tr>
-            ) : filteredOrders.map(order => (
-              <tr key={order.id} className="table-row">
-                <td className="p-3 pl-4">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-medium text-white">{order.orderNumber}</span>
-                    {order.source === 'TIENDANUBE' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/20">TN</span>}
-                    {order.source === 'MERCADOLIBRE' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-yellow-400/40" style={{backgroundColor: '#FFE600', color: '#000'}}>ML</span>}
-                    {order.source === 'EXCEL' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">XLS</span>}
-                    {order.source === 'MANUAL' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-400 border border-gray-500/20">MAN</span>}
-                  </div>
-                </td>
-                <td className="p-3">
-                  <div className="text-gray-200">{order.customerName}</div>
-                  {order.customerPhone && !/X{4,}/i.test(order.customerPhone) && <div className="text-xs text-gray-500">{order.customerPhone}</div>}
-                </td>
-                <td className="p-3">
-                  <div className="text-gray-300 max-w-[200px] truncate">{order.address}</div>
-                  <div className="text-xs text-gray-500 flex items-center gap-1">
-                    {order.lat ? <><MapPin size={10} className="text-emerald-400" /> Geocodificado</> : <><MapPin size={10} className="text-amber-400" /> Sin ubicacion</>}
-                  </div>
-                </td>
-                <td className="p-3 text-gray-400 text-xs whitespace-nowrap">{order.createdAt ? new Date(order.createdAt).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }) : '—'}</td>
-                <td className="p-3">
-                  <span className={STATUS_MAP[order.status]?.color || 'badge'}>
-                    {STATUS_MAP[order.status]?.label || order.status}
-                  </span>
-                </td>
-                <td className="p-3 text-gray-400 text-xs">
-                  {order.logisticId ? 'Asignada' : <span className="text-amber-400">Sin asignar</span>}
-                </td>
-                <td className="p-3 pr-4 text-right flex items-center justify-end gap-1">
-                  <button onClick={() => navigate(`/tienda/pedidos/${order.id}`)} className="text-gray-500 hover:text-teal-400 transition-colors" title="Ver detalle">
-                    <Eye size={16} />
-                  </button>
-                  {!order.logisticId && (
-                    <button
-                      onClick={() => handleAssignPlaceholder(order)}
-                      className="text-[11px] px-2 py-1 rounded-md bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 transition-colors flex items-center gap-1"
-                      title="Asignar a logistica"
-                    >
-                      <Truck size={12} /> Asignar
+              <tr><td colSpan={8} className="p-8 text-center text-gray-500">{orders.length === 0 ? 'No hay pedidos. Importá desde Tiendanube, MercadoLibre o Excel.' : 'No se encontraron pedidos con esos filtros.'}</td></tr>
+            ) : filteredOrders.map(order => {
+              const canSelect = !order.logisticId
+              return (
+                <tr key={order.id} className="table-row">
+                  <td className="p-3 pl-4">
+                    <input
+                      type="checkbox"
+                      checked={canSelect && selected.has(order.id)}
+                      onChange={() => canSelect && toggleSelect(order.id)}
+                      disabled={!canSelect}
+                      className="rounded border-navy-700 bg-navy-900 text-teal-500 disabled:opacity-30"
+                    />
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-white">{order.orderNumber}</span>
+                      {order.source === 'TIENDANUBE' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/20">TN</span>}
+                      {order.source === 'MERCADOLIBRE' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-yellow-400/40" style={{backgroundColor: '#FFE600', color: '#000'}}>ML</span>}
+                      {order.source === 'EXCEL' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">XLS</span>}
+                      {order.source === 'MANUAL' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-400 border border-gray-500/20">MAN</span>}
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    <div className="text-gray-200">{order.customerName}</div>
+                    {order.customerPhone && !/X{4,}/i.test(order.customerPhone) && <div className="text-xs text-gray-500">{order.customerPhone}</div>}
+                  </td>
+                  <td className="p-3">
+                    <div className="text-gray-300 max-w-[200px] truncate">{order.address}</div>
+                    <div className="text-xs text-gray-500 flex items-center gap-1">
+                      {order.lat ? <><MapPin size={10} className="text-emerald-400" /> Geocodificado</> : <><MapPin size={10} className="text-amber-400" /> Sin ubicacion</>}
+                    </div>
+                  </td>
+                  <td className="p-3 text-gray-400 text-xs whitespace-nowrap">{order.createdAt ? new Date(order.createdAt).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }) : '—'}</td>
+                  <td className="p-3">
+                    <span className={STATUS_MAP[order.status]?.color || 'badge'}>
+                      {STATUS_MAP[order.status]?.label || order.status}
+                    </span>
+                  </td>
+                  <td className="p-3 text-xs">
+                    {order.logistic?.name ? (
+                      <span className="inline-flex items-center gap-1 text-gray-300">
+                        <Truck size={12} className="text-teal-400" /> {order.logistic.name}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">Sin asignar</span>
+                    )}
+                  </td>
+                  <td className="p-3 pr-4 text-right">
+                    <button onClick={() => navigate(`/tienda/pedidos/${order.id}`)} className="text-gray-500 hover:text-teal-400 transition-colors" title="Ver detalle">
+                      <Eye size={16} />
                     </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -170,6 +319,12 @@ export default function StoreOrders() {
           <button onClick={() => setFilter(f => ({ ...f, page: f.page + 1 }))} disabled={orders.length < 30} className="btn-ghost text-xs">Siguiente</button>
         </div>
       )}
+
+      {/* Modals */}
+      {showCreate && <OrderModal onClose={() => setShowCreate(false)} onSaved={handleOrderSaved} />}
+      {showExcelModal && <ExcelImportModal onClose={() => setShowExcelModal(false)} onImported={loadOrders} />}
+      {showTNModal && <TNImportModal onClose={() => setShowTNModal(false)} onImported={loadOrders} />}
+      {showMLModal && <MLImportModal onClose={() => setShowMLModal(false)} onImported={loadOrders} />}
     </div>
   )
 }
