@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../../lib/store'
-import { X, Loader2, AlertCircle, Cloud, Check } from 'lucide-react'
+import { X, Loader2, AlertCircle, Cloud, Check, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 function toLocalDate(date) {
@@ -26,7 +26,7 @@ export default function TNImportModal({ onClose, onImported }) {
   // Hold the current in-flight request so we can abort it when the user changes the range
   const abortRef = useRef(null)
 
-  const fetchTNOrders = (from, to) => {
+  const fetchTNOrders = (from, to, forceRefresh = false) => {
     if (abortRef.current) abortRef.current.abort()
     const controller = new AbortController()
     abortRef.current = controller
@@ -36,6 +36,7 @@ export default function TNImportModal({ onClose, onImported }) {
     const params = { filter_shipping: 'rutaenvio' }
     if (from) params.date_from = from
     if (to) params.date_to = to
+    if (forceRefresh) params.refresh = 'true'
     api.get('/tiendanube/orders', { params, signal: controller.signal })
       .then(r => {
         if (controller.signal.aborted) return
@@ -174,6 +175,15 @@ export default function TNImportModal({ onClose, onImported }) {
               onChange={e => { if (e.target.value) handleDateToChange(e.target.value) }}
               className="input text-xs py-1.5 px-2 cursor-pointer [color-scheme:dark]"
             />
+            <button
+              type="button"
+              onClick={() => fetchTNOrders(dateFrom, dateTo, true)}
+              disabled={loading}
+              title="Refrescar (ignora cache)"
+              className="ml-1 p-1.5 rounded-lg bg-navy-800 text-gray-400 hover:text-white hover:bg-navy-700 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
           </div>
         </div>
 
