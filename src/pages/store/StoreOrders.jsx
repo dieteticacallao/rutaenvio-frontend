@@ -153,29 +153,29 @@ export default function StoreOrders() {
             {importDropdown && (
               <div className="absolute right-0 top-full mt-1.5 w-56 bg-navy-900 border border-navy-700 rounded-xl shadow-xl z-50 overflow-hidden">
                 <button
-                  onClick={() => { setImportDropdown(false); handleTNImport() }}
+                  onClick={() => {
+                    setImportDropdown(false)
+                    if (tnConnected) setShowTNModal(true)
+                    else navigate('/tienda/config')
+                  }}
                   className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white hover:bg-navy-800 transition-colors text-left"
                 >
                   <Cloud size={16} className="text-purple-400" />
-                  <span>Tiendanube</span>
+                  <span>{tnConnected ? 'Tiendanube' : 'Conectar Tiendanube'}</span>
                   {tnConnected && <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">Conectada</span>}
                 </button>
-                {mlConnected ? (
-                  <button
-                    onClick={() => { setImportDropdown(false); handleMLImport() }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white hover:bg-navy-800 transition-colors text-left"
-                  >
-                    <ShoppingBag size={16} className="text-yellow-400" />
-                    <span>MercadoLibre</span>
-                    <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">Conectada</span>
-                  </button>
-                ) : (
-                  <button disabled className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-600 cursor-not-allowed text-left">
-                    <ShoppingBag size={16} />
-                    <span>MercadoLibre</span>
-                    <span className="ml-auto text-[9px] text-gray-600">Proximamente</span>
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    setImportDropdown(false)
+                    if (mlConnected) setShowMLModal(true)
+                    else navigate('/tienda/config')
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white hover:bg-navy-800 transition-colors text-left"
+                >
+                  <ShoppingBag size={16} className="text-yellow-400" />
+                  <span>{mlConnected ? 'MercadoLibre' : 'Conectar MercadoLibre'}</span>
+                  {mlConnected && <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">Conectada</span>}
+                </button>
                 <button disabled className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-600 cursor-not-allowed text-left">
                   <ShoppingCart size={16} />
                   <span>Shopify</span>
