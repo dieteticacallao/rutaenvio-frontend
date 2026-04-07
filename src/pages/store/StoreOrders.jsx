@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP } from '../../lib/store'
-import { Package, Plus, Download, Search, X, MapPin, Loader2, Truck, Eye, FileSpreadsheet, ChevronDown, Cloud, ShoppingBag, ShoppingCart } from 'lucide-react'
+import { Package, Plus, Download, Search, X, MapPin, Loader2, Truck, Eye, FileSpreadsheet, ChevronDown, Cloud, ShoppingBag, ShoppingCart, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import OrderModal from '../../components/shared/OrderModal'
 import ExcelImportModal from '../../components/shared/ExcelImportModal'
@@ -93,6 +93,18 @@ export default function StoreOrders() {
       return
     }
     setShowMLModal(true)
+  }
+
+  const deleteOrder = async (orderId) => {
+    if (!window.confirm('¿Eliminar este pedido? Esta acción no se puede deshacer.')) return
+    try {
+      await api.delete(`/orders/${orderId}`)
+      toast.success('Pedido eliminado')
+      setOrders(prev => prev.filter(o => o.id !== orderId))
+      setTotal(prev => prev - 1)
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al eliminar')
+    }
   }
 
   const toggleSelect = (id) => {
@@ -299,10 +311,15 @@ export default function StoreOrders() {
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">Sin asignar</span>
                     )}
                   </td>
-                  <td className="p-3 pr-4 text-right">
+                  <td className="p-3 pr-4 text-right flex items-center justify-end gap-1">
                     <button onClick={() => navigate(`/tienda/pedidos/${order.id}`)} className="text-gray-500 hover:text-teal-400 transition-colors" title="Ver detalle">
                       <Eye size={16} />
                     </button>
+                    {!order.logisticId && (
+                      <button onClick={() => deleteOrder(order.id)} className="text-gray-500 hover:text-red-400 transition-colors" title="Eliminar pedido">
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               )
