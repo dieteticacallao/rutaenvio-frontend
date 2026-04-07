@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '../../lib/store'
 import { X, Loader2, AlertCircle, Cloud, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -18,14 +18,15 @@ export default function TNImportModal({ onClose, onImported }) {
   const [dateFrom, setDateFrom] = useState(today)
   const [dateTo, setDateTo] = useState(today)
 
-  const fetchTNOrders = useCallback((from, to) => {
+  useEffect(() => {
+    const controller = new AbortController()
     setLoading(true)
     setError(null)
     setSelected(new Set())
     const params = { filter_shipping: 'rutaenvio' }
-    if (from) params.date_from = from
-    if (to) params.date_to = to
-    api.get('/tiendanube/orders', { params })
+    if (dateFrom) params.date_from = dateFrom
+    if (dateTo) params.date_to = dateTo
+    api.get('/tiendanube/orders', { params, signal: controller.signal })
       .then(r => {
         const d = r.data
         const all = Array.isArray(d) ? d
@@ -40,15 +41,14 @@ export default function TNImportModal({ onClose, onImported }) {
         setLoading(false)
       })
       .catch(err => {
+        // Ignore aborted requests — only the latest in-flight call should update state
+        if (err.code === 'ERR_CANCELED' || err.name === 'CanceledError' || err.name === 'AbortError') return
         setTnOrders([])
         setError(err.response?.data?.error || 'Error al obtener pedidos de Tiendanube')
         setLoading(false)
       })
-  }, [])
-
-  useEffect(() => {
-    fetchTNOrders(dateFrom, dateTo)
-  }, [dateFrom, dateTo, fetchTNOrders])
+    return () => controller.abort()
+  }, [dateFrom, dateTo])
 
   const setQuickDate = (from, to) => {
     setDateFrom(from)
