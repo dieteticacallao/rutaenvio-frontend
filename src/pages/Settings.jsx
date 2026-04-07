@@ -30,6 +30,8 @@ export default function Settings() {
 
   if (loading) return <div className="flex items-center justify-center h-96 text-gray-500">Cargando...</div>
 
+  const isLogistics = user?.role === 'LOGISTICS_ADMIN'
+
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
@@ -63,14 +65,20 @@ export default function Settings() {
       {/* Zonas y tarifas */}
       <ZonesSection />
 
-      {/* Tiendanube integration */}
-      <TiendanubeSection settings={settings} onSettingsUpdate={() => api.get('/dashboard/settings').then(r => setSettings(r.data))} />
+      {/* Tiendanube integration (solo tienda) */}
+      {!isLogistics && (
+        <TiendanubeSection settings={settings} onSettingsUpdate={() => api.get('/dashboard/settings').then(r => setSettings(r.data))} />
+      )}
 
-      {/* MercadoLibre integration */}
-      <MercadoLibreSection />
+      {/* MercadoLibre integration (solo tienda) */}
+      {!isLogistics && <MercadoLibreSection />}
 
       {/* WhatsApp integration */}
-      <WhatsAppSection connected={settings?.integrations?.whatsapp} />
+      {isLogistics ? (
+        <WhatsAppComingSoonSection />
+      ) : (
+        <WhatsAppSection connected={settings?.integrations?.whatsapp} />
+      )}
     </div>
   )
 }
@@ -676,6 +684,23 @@ function WhatsAppSection({ connected }) {
           </div>
         </form>
       )}
+    </div>
+  )
+}
+
+function WhatsAppComingSoonSection() {
+  return (
+    <div className="card-p space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-white flex items-center gap-2">
+          <MessageCircle size={18} /> WhatsApp
+        </h3>
+        <span className="badge bg-gray-500/10 text-gray-400">Próximamente</span>
+      </div>
+
+      <p className="text-sm text-gray-500">
+        Próximamente podrás configurar notificaciones automáticas por WhatsApp
+      </p>
     </div>
   )
 }

@@ -1,16 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, STATUS_MAP } from '../lib/store'
+import { api, STATUS_MAP, useAuth } from '../lib/store'
 import { Package, Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Upload, AlertCircle, CheckCircle2, Check, Link2, ChevronDown, Cloud, ShoppingBag, ShoppingCart } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Orders() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isLogistics = user?.role === 'LOGISTICS_ADMIN'
   const [orders, setOrders] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState({ status: '', sources: [], zoneIds: [], page: 1 })
+  const [filter, setFilter] = useState({ status: '', sources: [], zoneIds: [], storeId: '', page: 1 })
   const [zones, setZones] = useState([])
+  const [myStores, setMyStores] = useState([])
   const [showCreate, setShowCreate] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
   const [showExcelModal, setShowExcelModal] = useState(false)
@@ -51,7 +54,12 @@ export default function Orders() {
     api.get('/zones').then(r => {
       setZones(r.data?.data || [])
     }).catch(() => {})
-  }, [])
+    if (isLogistics) {
+      api.get('/companies/my-stores').then(r => {
+        setMyStores(r.data?.data || [])
+      }).catch(() => {})
+    }
+  }, [isLogistics])
 
   const loadOrders = useCallback(() => {
     setLoading(true)
@@ -66,6 +74,9 @@ export default function Orders() {
     }
     if (filter.zoneIds.length > 0) {
       params.zoneId = filter.zoneIds.join(',')
+    }
+    if (filter.storeId) {
+      params.storeId = filter.storeId
     }
     api.get('/orders', { params }).then(r => {
       const d = r.data
@@ -163,9 +174,12 @@ export default function Orders() {
           <p className="text-sm text-gray-500">{total} total</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowExcelModal(true)} className="btn-secondary">
-            <FileSpreadsheet size={16} /> Importar Excel
-          </button>
+          {!isLogistics && (
+            <button onClick={() => setShowExcelModal(true)} className="btn-secondary">
+              <FileSpreadsheet size={16} /> Importar Excel
+            </button>
+          )}
+          {!isLogistics && (
           <div className="relative" ref={importDropdownRef}>
             <button onClick={() => setImportDropdown(v => !v)} className="btn-secondary">
               <Download size={16} /> Importar <ChevronDown size={14} />
@@ -204,15 +218,18 @@ export default function Orders() {
               </div>
             )}
           </div>
-          {mlConnected && (
+          )}
+          {!isLogistics && mlConnected && (
             <button onClick={handleMLSync} disabled={syncingML} className="btn-secondary">
               {syncingML ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
               Sincronizar ML
             </button>
           )}
-          <button onClick={() => setShowCreate(true)} className="btn-primary">
-            <Plus size={16} /> Nuevo pedido
-          </button>
+          {!isLogistics && (
+            <button onClick={() => setShowCreate(true)} className="btn-primary">
+              <Plus size={16} /> Nuevo pedido
+            </button>
+          )}
         </div>
       </div>
 
@@ -236,7 +253,7 @@ export default function Orders() {
 
       {/* Source + Zone multi-select filters */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        {(() => {
+        {!isLogistics && (() => {
           const allSources = ['TIENDANUBE', 'MERCADOLIBRE', 'EXCEL', 'MANUAL']
           const allSelected = allSources.every(s => filter.sources.includes(s))
           const noneSelected = filter.sources.length === 0
@@ -251,7 +268,7 @@ export default function Orders() {
             </button>
           )
         })()}
-        {[
+        {!isLogistics && [
           { value: 'TIENDANUBE', label: 'TN', bg: '#6E3FA3', text: 'white' },
           { value: 'MERCADOLIBRE', label: 'ML', bg: '#FFE600', text: 'black' },
           { value: 'EXCEL', label: 'XLS', bg: '#217346', text: 'white' },
@@ -367,6 +384,20 @@ export default function Orders() {
               )}
             </div>
           </div>
+          {isLogistics && (
+            <div className="flex items-center gap-1.5">
+              <select
+                value={filter.storeId}
+                onChange={e => setFilter(f => ({ ...f, storeId: e.target.value, page: 1 }))}
+                className="input text-xs py-2 px-2.5"
+              >
+                <option value="">Todos los clientes</option>
+                {myStores.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5">
               <label className="text-xs text-gray-500">Desde</label>
@@ -400,9 +431,9 @@ export default function Orders() {
               {btn.label}
             </button>
           ))}
-          {(searchQuery || dateFrom || dateTo || filter.status || filter.sources.length > 0 || filter.zoneIds.length > 0) && (
+          {(searchQuery || dateFrom || dateTo || filter.status || filter.sources.length > 0 || filter.zoneIds.length > 0 || filter.storeId) && (
             <button
-              onClick={() => { setSearchQuery(''); setDateFrom(''); setDateTo(''); setFilter(f => ({ ...f, status: '', sources: [], zoneIds: [], page: 1 })) }}
+              onClick={() => { setSearchQuery(''); setDateFrom(''); setDateTo(''); setFilter(f => ({ ...f, status: '', sources: [], zoneIds: [], storeId: '', page: 1 })) }}
               className="text-xs px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-1"
             >
               <X size={12} /> Limpiar filtros
@@ -417,6 +448,7 @@ export default function Orders() {
           <thead>
             <tr className="border-b border-navy-800 text-xs text-gray-500 uppercase tracking-wider">
               <th className="text-left p-3 pl-4">Pedido</th>
+              {isLogistics && <th className="text-left p-3">Tienda</th>}
               <th className="text-left p-3">Cliente</th>
               <th className="text-left p-3">Usuario ML</th>
               <th className="text-left p-3">Direccion</th>
@@ -428,9 +460,9 @@ export default function Orders() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="p-8 text-center text-gray-500"><Loader2 size={24} className="animate-spin inline-block mr-2" />Cargando pedidos...</td></tr>
+              <tr><td colSpan={isLogistics ? 9 : 8} className="p-8 text-center text-gray-500"><Loader2 size={24} className="animate-spin inline-block mr-2" />Cargando pedidos...</td></tr>
             ) : filteredOrders.length === 0 ? (
-              <tr><td colSpan={8} className="p-8 text-center text-gray-500">{orders.length === 0 ? 'No hay pedidos. Importa de Tiendanube o crea uno manual.' : 'No se encontraron pedidos con esos filtros.'}</td></tr>
+              <tr><td colSpan={isLogistics ? 9 : 8} className="p-8 text-center text-gray-500">{orders.length === 0 ? (isLogistics ? 'Tus clientes aún no asignaron pedidos a tu logística' : 'No hay pedidos. Importa de Tiendanube o crea uno manual.') : 'No se encontraron pedidos con esos filtros.'}</td></tr>
             ) : filteredOrders.map(order => {
               const mlMatch = order.source === 'MERCADOLIBRE' && order.customerName?.match(/^(.+?)\s*\(([^)]+)\)\s*$/)
               const displayName = mlMatch ? mlMatch[1] : order.customerName
@@ -446,6 +478,9 @@ export default function Orders() {
                     {order.source === 'MANUAL' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-400 border border-gray-500/20">MAN</span>}
                   </div>
                 </td>
+                {isLogistics && (
+                  <td className="p-3 text-gray-300 text-xs">{order.store?.name || '—'}</td>
+                )}
                 <td className="p-3">
                   <div className="text-gray-200">{displayName}</div>
                   {order.customerPhone && !/X{4,}/i.test(order.customerPhone) && <div className="text-xs text-gray-500">{order.customerPhone}</div>}

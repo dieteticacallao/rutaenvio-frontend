@@ -87,7 +87,7 @@ export default function Layout({ children }) {
             </div>
           )}
 
-          {/* Estadisticas with submenu */}
+          {/* Administracion with submenu */}
           <button
             onClick={() => setStatsOpen(o => !o)}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 w-full ${
@@ -97,7 +97,7 @@ export default function Layout({ children }) {
             }`}
           >
             <BarChart3 size={18} />
-            <span className="flex-1 text-left">Estadisticas</span>
+            <span className="flex-1 text-left">Administracion</span>
             <ChevronDown size={14} className={`transition-transform duration-200 ${statsOpen ? 'rotate-180' : ''}`} />
           </button>
 
