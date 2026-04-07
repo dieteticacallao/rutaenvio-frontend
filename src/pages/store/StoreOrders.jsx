@@ -39,17 +39,12 @@ export default function StoreOrders() {
   }, [])
 
   useEffect(() => {
-    api.get('/dashboard/settings').then(r => {
-      setTnConnected(!!r.data?.tnStoreId)
-    }).catch(() => {})
-    const mlBaseUrl = import.meta.env.VITE_API_URL || '/api'
-    const mlToken = localStorage.getItem('token')
-    fetch(mlBaseUrl + '/mercadolibre/status', {
-      headers: { 'Authorization': 'Bearer ' + mlToken, 'Content-Type': 'application/json' }
-    })
-      .then(r => r.ok ? r.json() : Promise.reject(r))
-      .then(res => setMlConnected(!!res?.data?.connected || !!res?.connected))
-      .catch(() => {})
+    api.get('/tiendanube/status')
+      .then(r => setTnConnected(!!(r.data?.data?.connected ?? r.data?.connected)))
+      .catch(() => setTnConnected(false))
+    api.get('/mercadolibre/status')
+      .then(r => setMlConnected(!!(r.data?.data?.connected ?? r.data?.connected)))
+      .catch(() => setMlConnected(false))
   }, [])
 
   const loadOrders = useCallback(() => {
