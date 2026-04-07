@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { api } from '../lib/store'
+import { api } from '../../lib/store'
 import { Users, Plus, X, Phone, Key, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 

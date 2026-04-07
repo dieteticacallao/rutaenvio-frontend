@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api } from '../lib/store'
+import { api } from '../../../lib/store'
 import { Loader2 } from 'lucide-react'
-import { DateFilter, ZONE_COLORS, ZONE_BAR_COLORS } from './Stats'
+import { DateFilter, ZONE_COLORS, ZONE_BAR_COLORS } from './General'
 
 export default function StatsBilling() {
   const [data, setData] = useState(null)

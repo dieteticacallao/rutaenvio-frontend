@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../lib/store'
+import { api } from '../../lib/store'
 import { Package, Truck, CheckCircle, Clock, TrendingUp, Users, Route, ArrowRight } from 'lucide-react'
 
 export default function Dashboard() {

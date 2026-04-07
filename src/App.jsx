@@ -1,20 +1,20 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './lib/store'
-import Layout from './components/Layout'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Orders from './pages/Orders'
-import RouteDistribution from './pages/RouteDistribution'
-import Drivers from './pages/Drivers'
-import Settings from './pages/Settings'
-import OrderDetail from './pages/OrderDetail'
-import TrackingPage from './pages/TrackingPage'
-import RouteView from './pages/RouteView'
-import RoutesHistory from './pages/RoutesHistory'
-import Stats from './pages/Stats'
-import StatsDrivers from './pages/StatsDrivers'
-import StatsBilling from './pages/StatsBilling'
+import LogisticsLayout from './components/LogisticsLayout'
+import Login from './pages/shared/Login'
+import Dashboard from './pages/logistics/Dashboard'
+import Orders from './pages/logistics/Orders'
+import RouteDistribution from './pages/logistics/RouteDistribution'
+import Drivers from './pages/logistics/Drivers'
+import Settings from './pages/logistics/Settings'
+import Routes_ from './pages/logistics/Routes'
+import StatsGeneral from './pages/logistics/stats/General'
+import StatsDrivers from './pages/logistics/stats/Drivers'
+import StatsBilling from './pages/logistics/stats/Billing'
+import OrderDetail from './pages/shared/OrderDetail'
+import TrackingPage from './pages/shared/TrackingPage'
+import RouteView from './pages/shared/RouteView'
 
 export default function App() {
   const { isAuthenticated, loadUser, token } = useAuth()
@@ -43,20 +43,20 @@ export default function App() {
   }
 
   return (
-    <Layout>
+    <LogisticsLayout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/orders/:id" element={<OrderDetail />} />
         <Route path="/routes" element={<RouteDistribution />} />
-        <Route path="/routes/history" element={<RoutesHistory />} />
-        <Route path="/stats" element={<Stats />} />
+        <Route path="/routes/history" element={<Routes_ />} />
+        <Route path="/stats" element={<StatsGeneral />} />
         <Route path="/stats/drivers" element={<StatsDrivers />} />
         <Route path="/stats/billing" element={<StatsBilling />} />
         <Route path="/drivers" element={<Drivers />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
-    </Layout>
+    </LogisticsLayout>
   )
 }

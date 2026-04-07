@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { api, STATUS_MAP } from '../lib/store'
+import { api, STATUS_MAP } from '../../lib/store'
 import { ArrowLeft, MapPin, Phone, User, Package, Clock, Star, MessageSquare, Camera, Loader2, FileText, Copy, MessageCircle, Link2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api } from '../lib/store'
+import { api } from '../../../lib/store'
 import { Loader2, ArrowUpDown, X } from 'lucide-react'
-import { DateFilter } from './Stats'
+import { DateFilter } from './General'
 
 export default function StatsDrivers() {
   const [data, setData] = useState([])

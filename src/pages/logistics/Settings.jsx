@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { api, useAuth } from '../lib/store'
+import { api, useAuth } from '../../lib/store'
 import { Settings as SettingsIcon, Store, MessageCircle, Link2, Check, AlertCircle, MapPin, Plus, Star, Trash2, Unplug, Map, Pencil, Loader2, DollarSign, X, ShoppingBag } from 'lucide-react'
 import toast from 'react-hot-toast'
 

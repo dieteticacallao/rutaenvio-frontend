@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../lib/store'
+import { useAuth } from '../../lib/store'
 import { Truck, ArrowRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 
