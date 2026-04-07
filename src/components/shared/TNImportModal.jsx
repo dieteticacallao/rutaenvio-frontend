@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../../lib/store'
 import { X, Loader2, AlertCircle, Cloud, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -10,24 +10,35 @@ function toLocalDate(date) {
 
 export default function TNImportModal({ onClose, onImported }) {
   const today = toLocalDate(new Date())
+  const sevenDaysAgo = toLocalDate(new Date(Date.now() - 7 * 86400000))
+  const yesterday = toLocalDate(new Date(Date.now() - 86400000))
+  const threeDaysAgo = toLocalDate(new Date(Date.now() - 3 * 86400000))
+
+  // Default range: last 7 days
+  const [dateFrom, setDateFrom] = useState(sevenDaysAgo)
+  const [dateTo, setDateTo] = useState(today)
   const [tnOrders, setTnOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(new Set())
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState(null)
-  const [dateFrom, setDateFrom] = useState(today)
-  const [dateTo, setDateTo] = useState(today)
 
-  useEffect(() => {
+  // Hold the current in-flight request so we can abort it when the user changes the range
+  const abortRef = useRef(null)
+
+  const fetchTNOrders = (from, to) => {
+    if (abortRef.current) abortRef.current.abort()
     const controller = new AbortController()
+    abortRef.current = controller
     setLoading(true)
     setError(null)
     setSelected(new Set())
     const params = { filter_shipping: 'rutaenvio' }
-    if (dateFrom) params.date_from = dateFrom
-    if (dateTo) params.date_to = dateTo
+    if (from) params.date_from = from
+    if (to) params.date_to = to
     api.get('/tiendanube/orders', { params, signal: controller.signal })
       .then(r => {
+        if (controller.signal.aborted) return
         const d = r.data
         const all = Array.isArray(d) ? d
           : Array.isArray(d?.data) ? d.data
@@ -41,23 +52,35 @@ export default function TNImportModal({ onClose, onImported }) {
         setLoading(false)
       })
       .catch(err => {
-        // Ignore aborted requests — only the latest in-flight call should update state
         if (err.code === 'ERR_CANCELED' || err.name === 'CanceledError' || err.name === 'AbortError') return
         setTnOrders([])
         setError(err.response?.data?.error || 'Error al obtener pedidos de Tiendanube')
         setLoading(false)
       })
-    return () => controller.abort()
-  }, [dateFrom, dateTo])
+  }
+
+  // Single fetch on mount with the default 7-day range. No auto-refetch on date change.
+  useEffect(() => {
+    fetchTNOrders(sevenDaysAgo, today)
+    return () => { if (abortRef.current) abortRef.current.abort() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const setQuickDate = (from, to) => {
     setDateFrom(from)
     setDateTo(to)
+    fetchTNOrders(from, to)
   }
 
-  const yesterday = toLocalDate(new Date(Date.now() - 86400000))
-  const threeDaysAgo = toLocalDate(new Date(Date.now() - 3 * 86400000))
-  const sevenDaysAgo = toLocalDate(new Date(Date.now() - 7 * 86400000))
+  const handleDateFromChange = (v) => {
+    setDateFrom(v)
+    fetchTNOrders(v, dateTo)
+  }
+
+  const handleDateToChange = (v) => {
+    setDateTo(v)
+    fetchTNOrders(dateFrom, v)
+  }
 
   const toggleSelect = (id) => {
     setSelected(prev => {
@@ -141,14 +164,14 @@ export default function TNImportModal({ onClose, onImported }) {
             <input
               type="date"
               value={dateFrom}
-              onChange={e => { if (e.target.value) setDateFrom(e.target.value) }}
+              onChange={e => { if (e.target.value) handleDateFromChange(e.target.value) }}
               className="input text-xs py-1.5 px-2 cursor-pointer [color-scheme:dark]"
             />
             <label className="text-xs text-gray-500">Hasta</label>
             <input
               type="date"
               value={dateTo}
-              onChange={e => { if (e.target.value) setDateTo(e.target.value) }}
+              onChange={e => { if (e.target.value) handleDateToChange(e.target.value) }}
               className="input text-xs py-1.5 px-2 cursor-pointer [color-scheme:dark]"
             />
           </div>
