@@ -44,24 +44,24 @@ export default function RouteDistribution() {
       }
       setLoading(false)
 
-      // Fetch driver suggestions for each order by zipCode (parallel, cached by CP)
-      const cpCache = new Map()
-      const fetchForCp = (cp) => {
-        if (cpCache.has(cp)) return cpCache.get(cp)
-        const p = api.get('/localities/suggest-driver', { params: { zipCode: cp } })
+      // Fetch driver suggestions for each order by zoneId (parallel, cached per zone)
+      const zoneCache = new Map()
+      const fetchForZone = (zoneId) => {
+        if (zoneCache.has(zoneId)) return zoneCache.get(zoneId)
+        const p = api.get('/zones/suggest-driver', { params: { zoneId } })
           .then(r => r.data?.data?.drivers || [])
           .catch(() => [])
-        cpCache.set(cp, p)
+        zoneCache.set(zoneId, p)
         return p
       }
-      const ordersWithCp = ordRes.data.filter(o => o.zipcode)
-      Promise.all(ordersWithCp.map(async (o) => {
-        const drivers = await fetchForCp(o.zipcode)
-        return [o.id, drivers]
+      const ordersWithZone = ordRes.data.filter(o => o.zoneId)
+      Promise.all(ordersWithZone.map(async (o) => {
+        const drvs = await fetchForZone(o.zoneId)
+        return [o.id, drvs]
       })).then(pairs => {
         const map = {}
-        for (const [id, drivers] of pairs) {
-          if (drivers && drivers.length > 0) map[id] = drivers
+        for (const [id, drvs] of pairs) {
+          if (drvs && drvs.length > 0) map[id] = drvs
         }
         setSuggestionsByOrder(map)
       }).catch(() => {})

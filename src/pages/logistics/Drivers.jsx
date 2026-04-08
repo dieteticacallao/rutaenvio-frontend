@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '../../lib/store'
-import { Users, Plus, X, Phone, Key, Trash2, ToggleLeft, ToggleRight, MapPin, Search } from 'lucide-react'
+import { Users, Plus, X, Phone, Key, ToggleLeft, ToggleRight, MapPin, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Drivers() {
@@ -129,186 +129,54 @@ export default function Drivers() {
   )
 }
 
-const CABA_PROVINCE = 'Ciudad Autónoma de Buenos Aires'
-const BSAS_PROVINCE = 'Buenos Aires'
-
-const ZONE_PRESETS = [
-  { key: 'caba', label: '+ CABA', type: 'province', province: CABA_PROVINCE },
-  {
-    key: 'gba-norte', label: '+ GBA Norte', type: 'names', province: BSAS_PROVINCE,
-    names: ['Olivos', 'Martínez', 'Beccar', 'Boulogne', 'Vicente López', 'Florida', 'Munro', 'San Fernando', 'Tigre', 'Don Torcuato', 'Nordelta', 'San Martín', 'Villa Maipú', 'Villa Lynch', 'San Isidro']
-  },
-  {
-    key: 'gba-sur', label: '+ GBA Sur', type: 'names', province: BSAS_PROVINCE,
-    names: ['Avellaneda', 'Lanús', 'Lomas de Zamora', 'Quilmes', 'Bernal', 'Berazategui', 'Florencio Varela', 'Almirante Brown', 'Esteban Echeverría']
-  },
-  {
-    key: 'gba-oeste', label: '+ GBA Oeste', type: 'names', province: BSAS_PROVINCE,
-    names: ['Morón', 'Haedo', 'Castelar', 'Ituzaingó', 'Ramos Mejía', 'San Justo', 'La Matanza', 'Merlo', 'Moreno', 'General Rodríguez']
-  }
-]
-
 function DriverLocalitiesModal({ driver, onClose }) {
-  const [items, setItems] = useState([])
+  const [allZones, setAllZones] = useState([])
+  const [assignedIds, setAssignedIds] = useState(new Set())
   const [loading, setLoading] = useState(true)
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
-  const [searching, setSearching] = useState(false)
-  const [focused, setFocused] = useState(false)
-  const [bulkLoading, setBulkLoading] = useState(null) // preset key while assigning
-  const debounceRef = useRef(null)
-  const abortRef = useRef(null)
+  const [pendingId, setPendingId] = useState(null) // zoneId currently toggling
 
   useEffect(() => {
     let cancelled = false
-    api.get(`/drivers/${driver.id}/localities`)
-      .then(r => {
-        if (cancelled) return
-        setItems(r.data?.data || [])
-        setLoading(false)
-      })
-      .catch(() => {
-        if (cancelled) return
-        toast.error('Error al cargar localidades')
-        setLoading(false)
-      })
+    Promise.all([
+      api.get('/zones'),
+      api.get(`/drivers/${driver.id}`)
+    ]).then(([zonesRes, driverRes]) => {
+      if (cancelled) return
+      const zones = zonesRes.data?.data || []
+      const assigned = driverRes.data?.data?.zones || []
+      setAllZones(zones)
+      setAssignedIds(new Set(assigned.map(z => z.id)))
+      setLoading(false)
+    }).catch(() => {
+      if (cancelled) return
+      toast.error('Error al cargar zonas')
+      setLoading(false)
+    })
     return () => { cancelled = true }
   }, [driver.id])
 
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    const q = query.trim()
-    if (q.length < 2) {
-      setResults([])
-      setSearching(false)
-      return
-    }
-    setSearching(true)
-    debounceRef.current = setTimeout(async () => {
-      if (abortRef.current) abortRef.current.abort()
-      const controller = new AbortController()
-      abortRef.current = controller
-      try {
-        const { data } = await api.get('/localities/search', {
-          params: { q },
-          signal: controller.signal
-        })
-        setResults(data?.data || [])
-      } catch (err) {
-        if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') {
-          console.error('search error', err)
-        }
-      } finally {
-        setSearching(false)
-      }
-    }, 300)
-    return () => clearTimeout(debounceRef.current)
-  }, [query])
-
-  const add = async (locality) => {
-    if (items.some(i => i.id === locality.id)) {
-      toast('Ya asignada', { icon: 'ℹ️' })
-      setQuery('')
-      setResults([])
-      return
-    }
+  const toggle = async (zone) => {
+    if (pendingId) return
+    setPendingId(zone.id)
+    const isAssigned = assignedIds.has(zone.id)
     try {
-      const { data } = await api.post(`/drivers/${driver.id}/localities`, { localityId: locality.id })
-      const added = data?.data || locality
-      setItems(prev => [...prev, added].sort((a, b) => a.name.localeCompare(b.name)))
-      setQuery('')
-      setResults([])
-      toast.success('Localidad agregada')
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Error al agregar')
-    }
-  }
-
-  const assignZone = async (preset) => {
-    if (bulkLoading) return
-    setBulkLoading(preset.key)
-    try {
-      // 1. Fetch candidate localities from the API
-      let candidates = []
-      if (preset.type === 'province') {
-        const { data } = await api.get('/localities/search', {
-          params: { province: preset.province, limit: 200 }
+      if (isAssigned) {
+        await api.delete(`/drivers/${driver.id}/zones/${zone.id}`)
+        setAssignedIds(prev => {
+          const next = new Set(prev)
+          next.delete(zone.id)
+          return next
         })
-        candidates = data?.data || []
+        toast.success(`${zone.name} quitada`)
       } else {
-        // names: fetch each name in parallel, pick best match within province
-        const results = await Promise.all(preset.names.map(async (name) => {
-          try {
-            const { data } = await api.get('/localities/search', {
-              params: { q: name, province: preset.province, limit: 20 }
-            })
-            const list = data?.data || []
-            // Prefer exact (case-insensitive) name match
-            const exact = list.find(l => l.name.toLowerCase() === name.toLowerCase())
-            return exact || list[0] || null
-          } catch {
-            return null
-          }
-        }))
-        // Dedupe by id
-        const seen = new Set()
-        for (const loc of results) {
-          if (loc && !seen.has(loc.id)) {
-            seen.add(loc.id)
-            candidates.push(loc)
-          }
-        }
+        await api.post(`/drivers/${driver.id}/zones`, { zoneId: zone.id })
+        setAssignedIds(prev => new Set(prev).add(zone.id))
+        toast.success(`${zone.name} asignada`)
       }
-
-      // 2. Filter out already-assigned
-      const assignedIds = new Set(items.map(i => i.id))
-      const toAssign = candidates.filter(c => !assignedIds.has(c.id))
-
-      if (toAssign.length === 0) {
-        toast('Ya estaban todas asignadas', { icon: 'ℹ️' })
-        return
-      }
-
-      // 3. POST each in parallel, ignore individual failures (duplicates, etc.)
-      const assigned = []
-      await Promise.all(toAssign.map(async (loc) => {
-        try {
-          await api.post(`/drivers/${driver.id}/localities`, { localityId: loc.id })
-          assigned.push(loc)
-        } catch {
-          // skip silently — unique constraint or transient
-        }
-      }))
-
-      if (assigned.length === 0) {
-        toast.error('No se pudo asignar ninguna localidad')
-        return
-      }
-
-      // 4. Merge into local state, sorted
-      setItems(prev => {
-        const merged = [...prev]
-        for (const loc of assigned) {
-          if (!merged.some(m => m.id === loc.id)) merged.push(loc)
-        }
-        return merged.sort((a, b) => a.name.localeCompare(b.name))
-      })
-      toast.success(`${assigned.length} ${assigned.length === 1 ? 'localidad agregada' : 'localidades agregadas'}`)
     } catch (err) {
-      console.error('Bulk assign error:', err)
-      toast.error('Error al asignar zona')
+      toast.error(err.response?.data?.error || 'Error al actualizar zona')
     } finally {
-      setBulkLoading(null)
-    }
-  }
-
-  const remove = async (localityId) => {
-    try {
-      await api.delete(`/drivers/${driver.id}/localities/${localityId}`)
-      setItems(prev => prev.filter(i => i.id !== localityId))
-      toast.success('Localidad quitada')
-    } catch (err) {
-      toast.error('Error al quitar localidad')
+      setPendingId(null)
     }
   }
 
@@ -325,85 +193,42 @@ function DriverLocalitiesModal({ driver, onClose }) {
           <button type="button" onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
         </div>
 
-        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin">
-          {ZONE_PRESETS.map(preset => {
-            const busy = bulkLoading === preset.key
-            return (
-              <button
-                key={preset.key}
-                type="button"
-                onClick={() => assignZone(preset)}
-                disabled={!!bulkLoading}
-                className={`flex-shrink-0 text-xs px-2.5 py-1 rounded-full border transition-colors whitespace-nowrap ${
-                  busy
-                    ? 'border-brand-500/50 bg-brand-500/10 text-brand-300'
-                    : 'border-navy-700 text-gray-300 hover:border-brand-500/50 hover:text-brand-300 hover:bg-brand-500/5 disabled:opacity-50 disabled:cursor-not-allowed'
-                }`}
-              >
-                {busy ? 'Asignando...' : preset.label}
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input
-            type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setTimeout(() => setFocused(false), 200)}
-            placeholder="Buscar localidad o CP..."
-            className="input pl-8 w-full"
-          />
-          {focused && query.trim().length >= 2 && (
-            <div className="absolute left-0 right-0 mt-1 bg-navy-900 border border-navy-700 rounded-lg shadow-2xl max-h-60 overflow-y-auto z-10">
-              {searching ? (
-                <div className="px-3 py-2 text-xs text-gray-500">Buscando...</div>
-              ) : results.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-gray-500">Sin resultados</div>
-              ) : results.map(loc => (
-                <button
-                  key={loc.id}
-                  type="button"
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={() => add(loc)}
-                  className="w-full text-left px-3 py-2 hover:bg-navy-800 border-b border-navy-800 last:border-0"
-                >
-                  <div className="text-sm text-white">{loc.name}</div>
-                  <div className="text-xs text-gray-500">CP {loc.zipCode} — {loc.province}</div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
         <div>
-          <div className="text-xs text-gray-500 mb-2">
-            {loading ? 'Cargando...' : `${items.length} ${items.length === 1 ? 'localidad asignada' : 'localidades asignadas'}`}
+          <div className="text-xs text-gray-500 mb-3">
+            {loading
+              ? 'Cargando zonas...'
+              : `${assignedIds.size} de ${allZones.length} zonas asignadas`}
           </div>
-          {!loading && items.length === 0 ? (
+
+          {loading ? (
+            <div className="py-8 text-center text-sm text-gray-500">Cargando...</div>
+          ) : allZones.length === 0 ? (
             <p className="text-sm text-gray-500 py-6 text-center border border-dashed border-navy-700 rounded-lg">
-              Sin zonas asignadas. Buscá arriba para agregar.
+              No hay zonas configuradas. Creá zonas desde la seccion de Zonas.
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {items.map(loc => (
-                <span key={loc.id} className="inline-flex items-center gap-1.5 bg-brand-500/10 border border-brand-500/30 text-brand-300 text-xs px-2.5 py-1.5 rounded-full">
-                  <MapPin size={11} />
-                  <span>{loc.name}</span>
-                  <span className="text-brand-400/60">{loc.zipCode}</span>
+              {allZones.map(zone => {
+                const active = assignedIds.has(zone.id)
+                const busy = pendingId === zone.id
+                return (
                   <button
+                    key={zone.id}
                     type="button"
-                    onClick={() => remove(loc.id)}
-                    className="text-brand-400/60 hover:text-red-400 ml-0.5"
-                    title="Quitar"
+                    onClick={() => toggle(zone)}
+                    disabled={!!pendingId}
+                    className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      active
+                        ? 'bg-brand-500/15 border-brand-500/50 text-brand-300 hover:bg-brand-500/25'
+                        : 'bg-navy-800/50 border-navy-700 text-gray-400 hover:border-brand-500/40 hover:text-brand-300'
+                    } ${busy ? 'opacity-60 cursor-wait' : pendingId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={zone.description || zone.name}
                   >
-                    <X size={12} />
+                    {active ? <Check size={12} /> : <Plus size={12} />}
+                    <span>{zone.name}</span>
                   </button>
-                </span>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
