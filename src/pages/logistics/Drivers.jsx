@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../../lib/store'
-import { Users, Plus, X, Phone, Key, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Users, Plus, X, Phone, Key, Trash2, ToggleLeft, ToggleRight, MapPin, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Drivers() {
@@ -8,9 +8,10 @@ export default function Drivers() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [newPin, setNewPin] = useState(null) // Show PIN after creation
+  const [zonesDriver, setZonesDriver] = useState(null) // Driver whose coverage is open
 
   const load = () => api.get('/drivers').then(r => { setDrivers(r.data); setLoading(false) })
-  useEffect(load, [])
+  useEffect(() => { load() }, [])
 
   const create = async (form) => {
     try {
@@ -103,7 +104,10 @@ export default function Drivers() {
               <div><div className="text-lg font-bold text-white">{driver._count?.orders || 0}</div><div className="text-[10px] text-gray-500">Activas</div></div>
             </div>
 
-            <div className="flex gap-1.5">
+            <div className="flex gap-1.5 mb-1.5">
+              <button onClick={() => setZonesDriver(driver)} className="btn-ghost text-xs flex-1 justify-center">
+                <MapPin size={14} /> Zonas
+              </button>
               <button onClick={() => resetPin(driver.id, driver.name)} className="btn-ghost text-xs flex-1 justify-center">
                 <Key size={14} /> Reset PIN
               </button>
@@ -118,6 +122,177 @@ export default function Drivers() {
 
       {/* Create driver modal */}
       {showCreate && <CreateDriverModal onClose={() => setShowCreate(false)} onCreate={create} />}
+
+      {/* Coverage zones modal */}
+      {zonesDriver && <DriverLocalitiesModal driver={zonesDriver} onClose={() => setZonesDriver(null)} />}
+    </div>
+  )
+}
+
+function DriverLocalitiesModal({ driver, onClose }) {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const debounceRef = useRef(null)
+  const abortRef = useRef(null)
+
+  useEffect(() => {
+    let cancelled = false
+    api.get(`/drivers/${driver.id}/localities`)
+      .then(r => {
+        if (cancelled) return
+        setItems(r.data?.data || [])
+        setLoading(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        toast.error('Error al cargar localidades')
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [driver.id])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    const q = query.trim()
+    if (q.length < 2) {
+      setResults([])
+      setSearching(false)
+      return
+    }
+    setSearching(true)
+    debounceRef.current = setTimeout(async () => {
+      if (abortRef.current) abortRef.current.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+      try {
+        const { data } = await api.get('/localities/search', {
+          params: { q },
+          signal: controller.signal
+        })
+        setResults(data?.data || [])
+      } catch (err) {
+        if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') {
+          console.error('search error', err)
+        }
+      } finally {
+        setSearching(false)
+      }
+    }, 300)
+    return () => clearTimeout(debounceRef.current)
+  }, [query])
+
+  const add = async (locality) => {
+    if (items.some(i => i.id === locality.id)) {
+      toast('Ya asignada', { icon: 'ℹ️' })
+      setQuery('')
+      setResults([])
+      return
+    }
+    try {
+      const { data } = await api.post(`/drivers/${driver.id}/localities`, { localityId: locality.id })
+      const added = data?.data || locality
+      setItems(prev => [...prev, added].sort((a, b) => a.name.localeCompare(b.name)))
+      setQuery('')
+      setResults([])
+      toast.success('Localidad agregada')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al agregar')
+    }
+  }
+
+  const remove = async (localityId) => {
+    try {
+      await api.delete(`/drivers/${driver.id}/localities/${localityId}`)
+      setItems(prev => prev.filter(i => i.id !== localityId))
+      toast.success('Localidad quitada')
+    } catch (err) {
+      toast.error('Error al quitar localidad')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="card-p w-full max-w-lg space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <MapPin size={18} className="text-brand-400" /> Zonas de cobertura
+            </h2>
+            <p className="text-xs text-gray-500">{driver.name}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
+        </div>
+
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setTimeout(() => setFocused(false), 200)}
+            placeholder="Buscar localidad o CP..."
+            className="input pl-8 w-full"
+          />
+          {focused && query.trim().length >= 2 && (
+            <div className="absolute left-0 right-0 mt-1 bg-navy-900 border border-navy-700 rounded-lg shadow-2xl max-h-60 overflow-y-auto z-10">
+              {searching ? (
+                <div className="px-3 py-2 text-xs text-gray-500">Buscando...</div>
+              ) : results.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-gray-500">Sin resultados</div>
+              ) : results.map(loc => (
+                <button
+                  key={loc.id}
+                  type="button"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => add(loc)}
+                  className="w-full text-left px-3 py-2 hover:bg-navy-800 border-b border-navy-800 last:border-0"
+                >
+                  <div className="text-sm text-white">{loc.name}</div>
+                  <div className="text-xs text-gray-500">CP {loc.zipCode} — {loc.province}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="text-xs text-gray-500 mb-2">
+            {loading ? 'Cargando...' : `${items.length} ${items.length === 1 ? 'localidad asignada' : 'localidades asignadas'}`}
+          </div>
+          {!loading && items.length === 0 ? (
+            <p className="text-sm text-gray-500 py-6 text-center border border-dashed border-navy-700 rounded-lg">
+              Sin zonas asignadas. Buscá arriba para agregar.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {items.map(loc => (
+                <span key={loc.id} className="inline-flex items-center gap-1.5 bg-brand-500/10 border border-brand-500/30 text-brand-300 text-xs px-2.5 py-1.5 rounded-full">
+                  <MapPin size={11} />
+                  <span>{loc.name}</span>
+                  <span className="text-brand-400/60">{loc.zipCode}</span>
+                  <button
+                    type="button"
+                    onClick={() => remove(loc.id)}
+                    className="text-brand-400/60 hover:text-red-400 ml-0.5"
+                    title="Quitar"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end">
+          <button type="button" onClick={onClose} className="btn-secondary">Cerrar</button>
+        </div>
+      </div>
     </div>
   )
 }

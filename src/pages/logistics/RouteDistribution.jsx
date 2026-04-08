@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api, ROUTE_COLORS } from '../../lib/store'
-import { Route, Users, Zap, Check, QrCode, ArrowRight, RotateCcw, Package, MapPin, X, Copy, MessageCircle, Printer, Search } from 'lucide-react'
+import { Route, Users, Zap, Check, QrCode, ArrowRight, RotateCcw, Package, MapPin, X, Copy, MessageCircle, Printer, Search, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function RouteDistribution() {
@@ -19,6 +19,7 @@ export default function RouteDistribution() {
   const [unassignedOrders, setUnassignedOrders] = useState([])
   const [reassignTargets, setReassignTargets] = useState({})
   const [orderSearch, setOrderSearch] = useState('')
+  const [suggestionsByOrder, setSuggestionsByOrder] = useState({}) // orderId -> [{id, name, ...}]
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef([])
@@ -42,8 +43,55 @@ export default function RouteDistribution() {
         if (def) setSelectedLocationId(def.id)
       }
       setLoading(false)
+
+      // Fetch driver suggestions for each order by zipCode (parallel, cached by CP)
+      const cpCache = new Map()
+      const fetchForCp = (cp) => {
+        if (cpCache.has(cp)) return cpCache.get(cp)
+        const p = api.get('/localities/suggest-driver', { params: { zipCode: cp } })
+          .then(r => r.data?.data?.drivers || [])
+          .catch(() => [])
+        cpCache.set(cp, p)
+        return p
+      }
+      const ordersWithCp = ordRes.data.filter(o => o.zipcode)
+      Promise.all(ordersWithCp.map(async (o) => {
+        const drivers = await fetchForCp(o.zipcode)
+        return [o.id, drivers]
+      })).then(pairs => {
+        const map = {}
+        for (const [id, drivers] of pairs) {
+          if (drivers && drivers.length > 0) map[id] = drivers
+        }
+        setSuggestionsByOrder(map)
+      }).catch(() => {})
     }).catch(() => setLoading(false))
   }, [])
+
+  // Helper: first suggested driver for an order, filtered to drivers available for distribution
+  const getSuggestedDriver = (orderId) => {
+    const suggested = suggestionsByOrder[orderId]
+    if (!suggested || suggested.length === 0) return null
+    // Prefer one that is also in the driver list (active)
+    return suggested.find(s => drivers.some(d => d.id === s.id)) || suggested[0]
+  }
+
+  // Pre-fill reassignTargets with suggested driver when orders become unassigned
+  useEffect(() => {
+    if (unassignedOrders.length === 0) return
+    setReassignTargets(prev => {
+      const next = { ...prev }
+      for (const o of unassignedOrders) {
+        if (next[o.id]) continue
+        const suggested = getSuggestedDriver(o.id)
+        if (suggested && distribution?.routes?.some(r => r.driverId === suggested.id)) {
+          next[o.id] = suggested.id
+        }
+      }
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unassignedOrders, suggestionsByOrder, distribution])
 
   // Initialize map once (depends on loading so it runs after the map div is in the DOM)
   useEffect(() => {
@@ -413,7 +461,9 @@ export default function RouteDistribution() {
                     if (!orderSearch.trim()) return true
                     const q = orderSearch.toLowerCase()
                     return (o.customerName || '').toLowerCase().includes(q) || (o.orderNumber || '').toLowerCase().includes(q)
-                  }).map(order => (
+                  }).map(order => {
+                    const suggested = getSuggestedDriver(order.id)
+                    return (
                     <label key={order.id}
                       className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors ${
                         selectedOrders.includes(order.id) ? 'bg-brand-500/10 border border-brand-500/20' : 'hover:bg-navy-800/50 border border-transparent'
@@ -424,10 +474,18 @@ export default function RouteDistribution() {
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-white truncate">{order.customerName}</div>
                         <div className="text-xs text-gray-500 truncate">{order.address}</div>
+                        {suggested && (
+                          <div className="flex items-center gap-1 mt-0.5" title="Basado en zona de cobertura">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-1.5 py-0.5">
+                              <Sparkles size={9} /> Sugerido: {suggested.name}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="text-xs font-mono text-gray-500">{order.orderNumber}</div>
                     </label>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -530,22 +588,36 @@ export default function RouteDistribution() {
                   <Package size={16} /> Pedidos sin asignar ({unassignedOrders.length})
                 </h3>
                 <div className="space-y-2">
-                  {unassignedOrders.map(order => (
-                    <div key={order.id} className="flex items-center gap-2 py-2 px-2 rounded bg-navy-800/50 text-xs">
+                  {unassignedOrders.map(order => {
+                    const suggestedList = suggestionsByOrder[order.id] || []
+                    const suggested = getSuggestedDriver(order.id)
+                    const hasSuggestion = !!suggested && distribution.routes.some(r => r.driverId === suggested.id)
+                    return (
+                    <div key={order.id} className={`flex items-center gap-2 py-2 px-2 rounded text-xs ${hasSuggestion ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-navy-800/50'}`}>
                       <div className="flex-1 min-w-0">
                         <div className="text-[10px] text-gray-500 font-mono truncate">{order.orderNumber}</div>
                         <div className="text-gray-300 font-semibold truncate">{order.customerName}</div>
                         <div className="text-gray-500 truncate">{order.address}</div>
+                        {hasSuggestion && (
+                          <div className="text-[10px] text-emerald-400/80 mt-0.5" title="Basado en zona de cobertura">
+                            Basado en zona de cobertura
+                          </div>
+                        )}
                       </div>
                       <select
-                        className="bg-navy-900 border border-navy-700 rounded text-xs text-gray-300 px-1.5 py-1"
+                        className={`bg-navy-900 border rounded text-xs px-1.5 py-1 ${hasSuggestion ? 'border-emerald-500/50 text-emerald-300' : 'border-navy-700 text-gray-300'}`}
                         value={reassignTargets[order.id] || ''}
                         onChange={e => setReassignTargets(prev => ({ ...prev, [order.id]: e.target.value }))}
                       >
                         <option value="">Cadete...</option>
-                        {distribution.routes.map(r => (
-                          <option key={r.driverId} value={r.driverId}>{r.driverName}</option>
-                        ))}
+                        {distribution.routes.map(r => {
+                          const isSuggested = suggestedList.some(s => s.id === r.driverId)
+                          return (
+                            <option key={r.driverId} value={r.driverId}>
+                              {isSuggested ? '★ ' : ''}{r.driverName}{isSuggested ? ' (sugerido)' : ''}
+                            </option>
+                          )
+                        })}
                       </select>
                       <button
                         onClick={() => reassignOrder(order.id, reassignTargets[order.id])}
@@ -555,7 +627,8 @@ export default function RouteDistribution() {
                         Reasignar
                       </button>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}
