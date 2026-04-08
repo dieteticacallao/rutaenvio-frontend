@@ -129,6 +129,25 @@ export default function Drivers() {
   )
 }
 
+const CABA_PROVINCE = 'Ciudad Autónoma de Buenos Aires'
+const BSAS_PROVINCE = 'Buenos Aires'
+
+const ZONE_PRESETS = [
+  { key: 'caba', label: '+ CABA', type: 'province', province: CABA_PROVINCE },
+  {
+    key: 'gba-norte', label: '+ GBA Norte', type: 'names', province: BSAS_PROVINCE,
+    names: ['Olivos', 'Martínez', 'Beccar', 'Boulogne', 'Vicente López', 'Florida', 'Munro', 'San Fernando', 'Tigre', 'Don Torcuato', 'Nordelta', 'San Martín', 'Villa Maipú', 'Villa Lynch', 'San Isidro']
+  },
+  {
+    key: 'gba-sur', label: '+ GBA Sur', type: 'names', province: BSAS_PROVINCE,
+    names: ['Avellaneda', 'Lanús', 'Lomas de Zamora', 'Quilmes', 'Bernal', 'Berazategui', 'Florencio Varela', 'Almirante Brown', 'Esteban Echeverría']
+  },
+  {
+    key: 'gba-oeste', label: '+ GBA Oeste', type: 'names', province: BSAS_PROVINCE,
+    names: ['Morón', 'Haedo', 'Castelar', 'Ituzaingó', 'Ramos Mejía', 'San Justo', 'La Matanza', 'Merlo', 'Moreno', 'General Rodríguez']
+  }
+]
+
 function DriverLocalitiesModal({ driver, onClose }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -136,6 +155,7 @@ function DriverLocalitiesModal({ driver, onClose }) {
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [bulkLoading, setBulkLoading] = useState(null) // preset key while assigning
   const debounceRef = useRef(null)
   const abortRef = useRef(null)
 
@@ -204,6 +224,84 @@ function DriverLocalitiesModal({ driver, onClose }) {
     }
   }
 
+  const assignZone = async (preset) => {
+    if (bulkLoading) return
+    setBulkLoading(preset.key)
+    try {
+      // 1. Fetch candidate localities from the API
+      let candidates = []
+      if (preset.type === 'province') {
+        const { data } = await api.get('/localities/search', {
+          params: { province: preset.province, limit: 200 }
+        })
+        candidates = data?.data || []
+      } else {
+        // names: fetch each name in parallel, pick best match within province
+        const results = await Promise.all(preset.names.map(async (name) => {
+          try {
+            const { data } = await api.get('/localities/search', {
+              params: { q: name, province: preset.province, limit: 20 }
+            })
+            const list = data?.data || []
+            // Prefer exact (case-insensitive) name match
+            const exact = list.find(l => l.name.toLowerCase() === name.toLowerCase())
+            return exact || list[0] || null
+          } catch {
+            return null
+          }
+        }))
+        // Dedupe by id
+        const seen = new Set()
+        for (const loc of results) {
+          if (loc && !seen.has(loc.id)) {
+            seen.add(loc.id)
+            candidates.push(loc)
+          }
+        }
+      }
+
+      // 2. Filter out already-assigned
+      const assignedIds = new Set(items.map(i => i.id))
+      const toAssign = candidates.filter(c => !assignedIds.has(c.id))
+
+      if (toAssign.length === 0) {
+        toast('Ya estaban todas asignadas', { icon: 'ℹ️' })
+        return
+      }
+
+      // 3. POST each in parallel, ignore individual failures (duplicates, etc.)
+      const assigned = []
+      await Promise.all(toAssign.map(async (loc) => {
+        try {
+          await api.post(`/drivers/${driver.id}/localities`, { localityId: loc.id })
+          assigned.push(loc)
+        } catch {
+          // skip silently — unique constraint or transient
+        }
+      }))
+
+      if (assigned.length === 0) {
+        toast.error('No se pudo asignar ninguna localidad')
+        return
+      }
+
+      // 4. Merge into local state, sorted
+      setItems(prev => {
+        const merged = [...prev]
+        for (const loc of assigned) {
+          if (!merged.some(m => m.id === loc.id)) merged.push(loc)
+        }
+        return merged.sort((a, b) => a.name.localeCompare(b.name))
+      })
+      toast.success(`${assigned.length} ${assigned.length === 1 ? 'localidad agregada' : 'localidades agregadas'}`)
+    } catch (err) {
+      console.error('Bulk assign error:', err)
+      toast.error('Error al asignar zona')
+    } finally {
+      setBulkLoading(null)
+    }
+  }
+
   const remove = async (localityId) => {
     try {
       await api.delete(`/drivers/${driver.id}/localities/${localityId}`)
@@ -225,6 +323,27 @@ function DriverLocalitiesModal({ driver, onClose }) {
             <p className="text-xs text-gray-500">{driver.name}</p>
           </div>
           <button type="button" onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
+        </div>
+
+        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin">
+          {ZONE_PRESETS.map(preset => {
+            const busy = bulkLoading === preset.key
+            return (
+              <button
+                key={preset.key}
+                type="button"
+                onClick={() => assignZone(preset)}
+                disabled={!!bulkLoading}
+                className={`flex-shrink-0 text-xs px-2.5 py-1 rounded-full border transition-colors whitespace-nowrap ${
+                  busy
+                    ? 'border-brand-500/50 bg-brand-500/10 text-brand-300'
+                    : 'border-navy-700 text-gray-300 hover:border-brand-500/50 hover:text-brand-300 hover:bg-brand-500/5 disabled:opacity-50 disabled:cursor-not-allowed'
+                }`}
+              >
+                {busy ? 'Asignando...' : preset.label}
+              </button>
+            )
+          })}
         </div>
 
         <div className="relative">
