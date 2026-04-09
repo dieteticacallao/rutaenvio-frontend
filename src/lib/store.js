@@ -83,7 +83,8 @@ export const STATUS_MAP = {
   DELIVERED: { label: 'Entregado', color: 'badge-delivered' },
   FAILED: { label: 'Fallido', color: 'badge-cancelled' },
   CANCELLED: { label: 'Cancelado', color: 'badge-cancelled' },
-  RETURNED: { label: 'Devuelto', color: 'badge-cancelled' }
+  RETURNED: { label: 'Devuelto', color: 'badge-cancelled' },
+  RESCHEDULED: { label: 'Reprogramado', color: 'badge-pending' }
 };
 
 export const ROUTE_COLORS = [

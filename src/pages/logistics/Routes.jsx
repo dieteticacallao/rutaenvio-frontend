@@ -325,17 +325,51 @@ export default function RoutesHistory() {
 
           {/* QR + Link sidebar */}
           <div className="space-y-4">
-            {selectedRoute.qrCode && (
-              <div className="card-p text-center">
-                <h3 className="font-semibold text-white mb-3 flex items-center justify-center gap-2">
-                  <QrCode size={16} className="text-brand-400" /> QR de la ruta
-                </h3>
-                <img src={selectedRoute.qrCode} alt="QR" className="w-48 h-48 mx-auto rounded-lg bg-white p-2" />
-                <p className="text-xs text-gray-500 mt-2">
-                  El cadete escanea este QR desde la app
-                </p>
-              </div>
-            )}
+            {(() => {
+              const token = selectedRoute.token || selectedRoute.linkToken
+              if (!token) return null
+              const routeUrl = `https://rutaenvio-frontend.vercel.app/ruta/${token}`
+              const phone = (selectedRoute.driver?.phone || '').replace(/\D/g, '')
+              const hasPhone = phone.length > 0
+              const driverName = selectedRoute.driver?.name || 'cadete'
+              const waHref = hasPhone
+                ? `https://wa.me/${phone}?text=${encodeURIComponent(`Hola ${driverName}, tu ruta de hoy: ${routeUrl}`)}`
+                : null
+              return (
+                <div className="card-p space-y-3">
+                  <h3 className="font-semibold text-white text-sm">Compartir ruta</h3>
+                  <div className="flex flex-col gap-2">
+                    {hasPhone ? (
+                      <a
+                        href={waHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-primary text-xs justify-center"
+                      >
+                        <MessageCircle size={14} /> Enviar por WhatsApp
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        title="El cadete no tiene teléfono registrado"
+                        className="btn-primary text-xs justify-center opacity-50 cursor-not-allowed"
+                      >
+                        <MessageCircle size={14} /> Enviar por WhatsApp
+                      </button>
+                    )}
+                    <a
+                      href={routeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-secondary text-xs justify-center"
+                    >
+                      <Eye size={14} /> Ver ruta
+                    </a>
+                  </div>
+                </div>
+              )
+            })()}
 
             {link && (
               <div className="card-p space-y-3">
