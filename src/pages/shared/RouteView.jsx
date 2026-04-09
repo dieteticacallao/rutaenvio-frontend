@@ -630,7 +630,7 @@ export default function RouteView() {
               rel="noopener noreferrer"
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors text-xs no-underline border border-emerald-500/20"
             >
-              <MessageCircle size={12} /> WhatsApp
+              <MessageCircle size={12} /> WhatsApp · Avisar al cliente
             </a>
           </div>
         )}
