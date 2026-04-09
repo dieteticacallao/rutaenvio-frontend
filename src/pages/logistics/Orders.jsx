@@ -17,7 +17,7 @@ export default function Orders() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState({ status: '', sources: [], zoneIds: [], storeId: '', page: 1 })
   const [zones, setZones] = useState([])
-  const [myStores, setMyStores] = useState([])
+  const [clients, setClients] = useState([])
   const [showCreate, setShowCreate] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
   const [showExcelModal, setShowExcelModal] = useState(false)
@@ -59,8 +59,8 @@ export default function Orders() {
       setZones(r.data?.data || [])
     }).catch(() => {})
     if (isLogistics) {
-      api.get('/companies/my-stores').then(r => {
-        setMyStores(r.data?.data || [])
+      api.get('/logistics/clients').then(r => {
+        setClients(r.data?.data || [])
       }).catch(() => {})
     }
   }, [isLogistics])
@@ -178,11 +178,9 @@ export default function Orders() {
           <p className="text-sm text-gray-500">{total} total</p>
         </div>
         <div className="flex gap-2">
-          {!isLogistics && (
-            <button onClick={() => setShowExcelModal(true)} className="btn-secondary">
-              <FileSpreadsheet size={16} /> Importar Excel
-            </button>
-          )}
+          <button onClick={() => setShowExcelModal(true)} className="btn-secondary">
+            <FileSpreadsheet size={16} /> Importar Excel
+          </button>
           {!isLogistics && (
           <div className="relative" ref={importDropdownRef}>
             <button onClick={() => setImportDropdown(v => !v)} className="btn-secondary">
@@ -229,11 +227,9 @@ export default function Orders() {
               Sincronizar ML
             </button>
           )}
-          {!isLogistics && (
-            <button onClick={() => setShowCreate(true)} className="btn-primary">
-              <Plus size={16} /> Nuevo pedido
-            </button>
-          )}
+          <button onClick={() => setShowCreate(true)} className="btn-primary">
+            <Plus size={16} /> Nuevo pedido
+          </button>
         </div>
       </div>
 
@@ -396,7 +392,7 @@ export default function Orders() {
                 className="input text-xs py-2 px-2.5"
               >
                 <option value="">Todos los clientes</option>
-                {myStores.map(s => (
+                {clients.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
@@ -542,9 +538,9 @@ export default function Orders() {
       )}
 
       {/* Create Order Modal */}
-      {showCreate && <OrderModal onClose={() => setShowCreate(false)} onSaved={handleOrderSaved} />}
-      {editingOrder && <OrderModal order={editingOrder} onClose={() => setEditingOrder(null)} onSaved={handleOrderSaved} />}
-      {showExcelModal && <ExcelImportModal onClose={() => setShowExcelModal(false)} onImported={loadOrders} />}
+      {showCreate && <OrderModal clients={isLogistics ? clients : null} onClose={() => setShowCreate(false)} onSaved={handleOrderSaved} />}
+      {editingOrder && <OrderModal order={editingOrder} clients={isLogistics ? clients : null} onClose={() => setEditingOrder(null)} onSaved={handleOrderSaved} />}
+      {showExcelModal && <ExcelImportModal clients={isLogistics ? clients : null} onClose={() => setShowExcelModal(false)} onImported={loadOrders} />}
       {showTNModal && <TNImportModal onClose={() => setShowTNModal(false)} onImported={loadOrders} />}
       {showMLModal && <MLImportModal onClose={() => setShowMLModal(false)} onImported={loadOrders} />}
     </div>

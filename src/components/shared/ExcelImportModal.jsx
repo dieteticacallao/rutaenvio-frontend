@@ -3,8 +3,10 @@ import { api } from '../../lib/store'
 import { X, Download, Upload, Loader2, FileSpreadsheet, CheckCircle2, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-export default function ExcelImportModal({ onClose, onImported }) {
+export default function ExcelImportModal({ clients, onClose, onImported }) {
+  const showClientSelector = Array.isArray(clients)
   const [file, setFile] = useState(null)
+  const [clientId, setClientId] = useState('')
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState(null)
 
@@ -34,6 +36,7 @@ export default function ExcelImportModal({ onClose, onImported }) {
     try {
       const formData = new FormData()
       formData.append('file', file)
+      if (showClientSelector && clientId) formData.append('clientId', clientId)
       const { data } = await api.post('/orders/import-excel', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
@@ -56,6 +59,17 @@ export default function ExcelImportModal({ onClose, onImported }) {
         {!result ? (
           <>
             <div className="space-y-3">
+              {showClientSelector && (
+                <div>
+                  <label className="label">Cliente</label>
+                  <select className="input" value={clientId} onChange={e => setClientId(e.target.value)}>
+                    <option value="">Sin cliente asignado</option>
+                    {clients.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <p className="text-sm text-gray-400 mb-2">1. Descarga la plantilla y completa los datos de tus pedidos.</p>
                 <button onClick={downloadTemplate} className="btn-secondary text-sm">

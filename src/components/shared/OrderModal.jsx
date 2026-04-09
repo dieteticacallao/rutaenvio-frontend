@@ -3,13 +3,15 @@ import { api } from '../../lib/store'
 import { X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-export default function OrderModal({ order, onClose, onSaved }) {
+export default function OrderModal({ order, clients, onClose, onSaved }) {
   const isEdit = !!order
+  const showClientSelector = Array.isArray(clients) && !isEdit
   const [form, setForm] = useState({
     customerName: order?.customerName || '', customerPhone: order?.customerPhone || '',
     address: order?.address || '', addressDetail: order?.addressDetail || '',
     city: order?.city || '', province: order?.province || 'Buenos Aires', zipCode: order?.zipcode || '', notes: order?.notes || ''
   })
+  const [clientId, setClientId] = useState('')
   const [saving, setSaving] = useState(false)
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
 
@@ -51,7 +53,9 @@ export default function OrderModal({ order, onClose, onSaved }) {
         toast.success('Pedido actualizado')
         onSaved(data, true)
       } else {
-        const { data } = await api.post('/orders', form)
+        const body = { ...form }
+        if (showClientSelector && clientId) body.clientId = clientId
+        const { data } = await api.post('/orders', body)
         toast.success('Pedido creado')
         onSaved(data, false)
       }
@@ -69,6 +73,18 @@ export default function OrderModal({ order, onClose, onSaved }) {
           <h2 className="text-lg font-bold text-white">{isEdit ? 'Editar pedido' : 'Nuevo pedido'}</h2>
           <button type="button" onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
         </div>
+
+        {showClientSelector && (
+          <div>
+            <label className="label">Cliente</label>
+            <select className="input" value={clientId} onChange={e => setClientId(e.target.value)}>
+              <option value="">Sin cliente asignado</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div><label className="label">Nombre cliente *</label><input className="input" value={form.customerName} onChange={set('customerName')} required /></div>
