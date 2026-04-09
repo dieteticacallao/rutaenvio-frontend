@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api, ROUTE_COLORS } from '../../lib/store'
-import { Route, Users, Zap, Check, QrCode, ArrowRight, RotateCcw, Package, MapPin, X, Copy, MessageCircle, Printer, Search, Sparkles } from 'lucide-react'
+import { Users, Zap, Check, RotateCcw, Package, MapPin, X, MessageCircle, ExternalLink, Search, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function RouteDistribution() {
@@ -405,7 +405,7 @@ export default function RouteDistribution() {
           <p className="text-sm text-gray-500">
             {step === 1 && `${orders.length} pedidos pendientes, ${drivers.length} cadetes disponibles`}
             {step === 2 && 'Revisá la distribución y confirmá'}
-            {step === 3 && 'Rutas listas — compartí los QR con tus cadetes'}
+            {step === 3 && 'Rutas listas — enviá el link a cada cadete'}
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -644,65 +644,55 @@ export default function RouteDistribution() {
           </>}
 
           {step === 3 && confirmedRoutes && <>
-            {/* QR codes for each route */}
-            {confirmedRoutes.map((route, i) => {
-              const routeLink = route.linkToken ? `${window.location.origin}/ruta/${route.linkToken}` : null
+            {confirmedRoutes.map((route) => {
+              const token = route.token || route.linkToken
+              const routeUrl = token ? `https://rutaenvio-frontend.vercel.app/ruta/${token}` : null
+              const phone = (route.driverPhone || '').replace(/\D/g, '')
+              const hasPhone = phone.length > 0
+              const driverName = route.driverName || 'cadete'
+              const dateStr = route.date
+                ? new Date(route.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })
+                : null
+              const waHref = hasPhone && routeUrl
+                ? `https://wa.me/${phone}?text=${encodeURIComponent(`Hola ${driverName}, tu ruta de hoy: ${routeUrl}`)}`
+                : null
+
               return (
-                <div key={route.id} className="card-p text-center">
-                  <div className="text-sm font-semibold text-white mb-2">{route.name}</div>
-                  {route.qrCode && (
-                    <img src={route.qrCode} alt="QR" className="w-48 h-48 mx-auto rounded-lg bg-white p-2" />
-                  )}
-                  <p className="text-xs text-gray-500 mt-2">
-                    El cadete escanea este QR desde la app para cargar su ruta
-                  </p>
-                  {routeLink && (
-                    <div className="mt-3 space-y-2">
-                      <div className="flex items-center gap-1.5 bg-navy-900 border border-navy-700 rounded-lg px-3 py-2">
-                        <input
-                          type="text"
-                          readOnly
-                          value={routeLink}
-                          className="flex-1 bg-transparent text-xs text-brand-300 outline-none truncate"
-                          onClick={e => e.target.select()}
-                        />
-                        <button
-                          onClick={() => { navigator.clipboard.writeText(routeLink); toast.success('Link copiado') }}
-                          className="text-gray-400 hover:text-brand-400 transition-colors flex-shrink-0"
-                          title="Copiar link"
-                        >
-                          <Copy size={14} />
-                        </button>
-                      </div>
-                      <div className="flex gap-2 justify-center flex-wrap">
-                        <button
-                          onClick={() => { navigator.clipboard.writeText(routeLink); toast.success('Link copiado') }}
-                          className="btn-secondary text-xs"
-                        >
-                          <Copy size={14} /> Copiar link
-                        </button>
-                        {route.driverPhone && (
-                          <a
-                            href={`https://wa.me/${route.driverPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola! Aca tenes tu ruta de hoy: ${routeLink}`)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn-secondary text-xs inline-flex items-center gap-1.5"
-                          >
-                            <MessageCircle size={14} /> Enviar por WhatsApp
-                          </a>
-                        )}
-                        <button
-                          onClick={() => {
-                            const base = (api.defaults.baseURL || '/api').replace(/\/$/, '')
-                            window.open(`${base}/routes/${route.id}/labels`, '_blank')
-                          }}
-                          className="btn-secondary text-xs"
-                        >
-                          <Printer size={14} /> Imprimir etiquetas
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                <div key={route.id} className="card-p">
+                  <div className="text-sm font-semibold text-white">{route.name || `Ruta ${driverName}`}</div>
+                  {dateStr && <div className="text-xs text-gray-500 mb-3">{dateStr}</div>}
+
+                  <div className="flex gap-2 mt-3">
+                    {hasPhone ? (
+                      <a
+                        href={waHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-primary text-xs flex-1 justify-center"
+                      >
+                        <MessageCircle size={14} /> Enviar por WhatsApp
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        title="El cadete no tiene teléfono registrado"
+                        className="btn-primary text-xs flex-1 justify-center opacity-50 cursor-not-allowed"
+                      >
+                        <MessageCircle size={14} /> Enviar por WhatsApp
+                      </button>
+                    )}
+                    {routeUrl && (
+                      <a
+                        href={routeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-secondary text-xs flex-1 justify-center"
+                      >
+                        <ExternalLink size={14} /> Ver ruta
+                      </a>
+                    )}
+                  </div>
                 </div>
               )
             })}
