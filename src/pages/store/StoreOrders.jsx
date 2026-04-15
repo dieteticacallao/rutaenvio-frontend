@@ -263,27 +263,45 @@ export default function StoreOrders() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          {selected.size > 0 && !allVisibleSelectedAreML && (
-            <button
-              onClick={handlePrintLabels}
-              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-navy-800 text-gray-200 hover:bg-navy-700 border border-navy-700 transition-colors"
-              title={allAcrossPages
-                ? `Imprimir etiquetas de los seleccionados (se excluiran los de ML)`
-                : `Imprimir ${nonMLSelectedVisible.length} etiqueta${nonMLSelectedVisible.length !== 1 ? 's' : ''}${nonMLSelectedVisible.length < selected.size ? ' (se omiten los de ML)' : ''}`}
-            >
-              <Printer size={14} /> Imprimir etiquetas
-            </button>
-          )}
-          <button
-            onClick={() => setShowAssignModal(true)}
-            disabled={selected.size === 0}
-            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-500 text-white hover:bg-teal-600 transition-colors disabled:bg-teal-500/10 disabled:text-teal-400/60 disabled:cursor-not-allowed"
-          >
-            <Truck size={14} /> Asignar {selected.size > 0 ? `${selected.size} pedido${selected.size !== 1 ? 's' : ''}` : 'a logistica'}
-          </button>
-        </div>
+        <button
+          onClick={() => setShowAssignModal(true)}
+          disabled={selected.size === 0}
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-500 text-white hover:bg-teal-600 transition-colors disabled:bg-teal-500/10 disabled:text-teal-400/60 disabled:cursor-not-allowed"
+        >
+          <Truck size={14} /> Asignar {selected.size > 0 ? `${selected.size} pedido${selected.size !== 1 ? 's' : ''}` : 'a logistica'}
+        </button>
       </div>
+
+      {/* Bulk action bar: aparece cuando hay pedidos seleccionados */}
+      {selected.size > 0 && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg bg-teal-500/10 border border-teal-500/30">
+          <span className="text-sm text-gray-200">
+            <strong className="text-white">{selected.size}</strong> pedido{selected.size !== 1 ? 's' : ''} seleccionado{selected.size !== 1 ? 's' : ''}
+            {!allAcrossPages && nonMLSelectedVisible.length < selected.size && nonMLSelectedVisible.length > 0 && (
+              <span className="text-xs text-gray-400 ml-2">({selected.size - nonMLSelectedVisible.length} de ML sin etiqueta)</span>
+            )}
+          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {!allVisibleSelectedAreML && (
+              <button
+                onClick={handlePrintLabels}
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors font-medium"
+                title={allAcrossPages
+                  ? 'Imprimir etiquetas (se excluiran los de ML)'
+                  : `Imprimir ${nonMLSelectedVisible.length} etiqueta${nonMLSelectedVisible.length !== 1 ? 's' : ''}`}
+              >
+                <Printer size={14} /> Imprimir etiquetas{allAcrossPages ? '' : ` (${nonMLSelectedVisible.length})`}
+              </button>
+            )}
+            <button
+              onClick={clearSelection}
+              className="text-xs text-gray-400 hover:text-white underline"
+            >
+              Limpiar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Platform filter chips */}
       <div className="flex gap-1.5 flex-wrap items-center">

@@ -16,6 +16,7 @@ import StatsBilling from './pages/logistics/stats/Billing'
 import StoreDashboard from './pages/store/StoreDashboard'
 import StoreOrders from './pages/store/StoreOrders'
 import StoreRoutes from './pages/store/StoreRoutes'
+import StoreRouteDetail from './pages/store/StoreRouteDetail'
 import StoreSettings from './pages/store/StoreSettings'
 import OrderDetail from './pages/shared/OrderDetail'
 import TrackingPage from './pages/shared/TrackingPage'
@@ -68,6 +69,7 @@ export default function App() {
           <Route path="/tienda/pedidos" element={<StoreOrders />} />
           <Route path="/tienda/pedidos/:id" element={<OrderDetail />} />
           <Route path="/tienda/rutas" element={<StoreRoutes />} />
+          <Route path="/tienda/rutas/:id" element={<StoreRouteDetail />} />
           <Route path="/tienda/config" element={<StoreSettings />} />
           <Route path="*" element={<Navigate to="/tienda/dashboard" replace />} />
         </Routes>

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/store'
 import { Route as RouteIcon, Loader2, Eye } from 'lucide-react'
 
 export default function StoreRoutes() {
+  const navigate = useNavigate()
   const [routes, setRoutes] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -47,7 +49,11 @@ export default function StoreRoutes() {
             ) : routes.length === 0 ? (
               <tr><td colSpan={6} className="p-8 text-center text-gray-500">Tu logística aún no creó rutas con tus pedidos</td></tr>
             ) : routes.map(r => (
-              <tr key={r.id} className="table-row">
+              <tr
+                key={r.id}
+                className="table-row cursor-pointer"
+                onClick={() => navigate(`/tienda/rutas/${r.id}`)}
+              >
                 <td className="p-3 pl-4 text-gray-300 whitespace-nowrap">
                   {r.date ? new Date(r.date).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }) : '—'}
                 </td>
@@ -63,7 +69,11 @@ export default function StoreRoutes() {
                   <div className="text-[10px] text-gray-500">de {r.totalOrders} total</div>
                 </td>
                 <td className="p-3 pr-4 text-right">
-                  <button className="text-gray-500 hover:text-teal-400 transition-colors" title="Ver detalle">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate(`/tienda/rutas/${r.id}`) }}
+                    className="text-gray-500 hover:text-teal-400 transition-colors p-1.5 rounded-lg hover:bg-navy-800"
+                    title="Ver detalle"
+                  >
                     <Eye size={16} />
                   </button>
                 </td>
