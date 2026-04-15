@@ -325,13 +325,15 @@ export default function RouteView() {
           if (isProcessingQrRef.current) return
           isProcessingQrRef.current = true
 
-          const payload = extractScanPayload(decodedText)
-          console.log('[Route] QR recibido (per-order):', payload)
+          const { code } = extractScanPayload(decodedText)
+          const orders = route?.orders || []
+          console.log('[QR Match] Buscando:', code, 'en pedidos:',
+            orders.map(o => ({ trackingCode: o.trackingCode, orderNumber: o.orderNumber })))
 
-          // Match por trackingCode o id en la ruta completa
-          const order = route?.orders?.find(o =>
-            (payload.tracking && o.trackingCode === payload.tracking) ||
-            (payload.id && o.id === payload.id)
+          const order = orders.find(o =>
+            o.trackingCode === code ||
+            o.orderNumber === code ||
+            o.id === code
           )
 
           try { await scanner.stop() } catch {}
@@ -375,32 +377,34 @@ export default function RouteView() {
     setTimeout(() => setFlashMessage(null), 3500)
   }
 
-  // Extract a tracking code from raw QR text.
-  // Accepts: JSON { trackingCode | tracking | orderId | id }, URLs like
-  // https://rutaenvio-frontend.vercel.app/track/ABC123, or a plain code.
+  // Extract a code from raw QR text. Devuelve el token limpio que se usa
+  // para matchear contra trackingCode / orderNumber / id del pedido.
+  //
+  // Soporta:
+  //  - JSON { trackingCode | tracking | orderNumber | orderId | id }
+  //  - URLs (http/https) o cualquier string con "/": toma el ultimo segmento
+  //  - Strings planos
   const extractScanPayload = (decodedText) => {
     const raw = (decodedText || '').trim()
-    if (!raw) return { tracking: null, id: null, raw: '' }
+    if (!raw) return { code: '', raw: '' }
     // 1) JSON
     try {
       const p = JSON.parse(raw)
       return {
-        tracking: p.trackingCode || p.tracking || null,
-        id: p.orderId || p.id || null,
+        code: (p.trackingCode || p.tracking || p.orderNumber || p.orderId || p.id || '').toString().trim(),
         raw
       }
     } catch {}
-    // 2) URL - take last non-empty path segment
-    if (/^https?:\/\//i.test(raw)) {
-      try {
-        const u = new URL(raw)
-        const segs = u.pathname.split('/').filter(Boolean)
-        const last = segs[segs.length - 1] || null
-        return { tracking: last, id: null, raw }
-      } catch {}
+    // 2) Si contiene "/", tomar la ultima parte (maneja URLs completas,
+    //    paths relativos, etc. No importa si es /track/ o /tracking/).
+    let code = raw
+    if (code.includes('/')) {
+      // Quitar query string y fragment antes de split
+      code = code.split('?')[0].split('#')[0]
+      const segs = code.split('/').filter(Boolean)
+      code = segs[segs.length - 1] || raw
     }
-    // 3) plain string - could be trackingCode or order id
-    return { tracking: raw, id: raw, raw }
+    return { code: code.trim(), raw }
   }
 
   useEffect(() => {
@@ -433,13 +437,16 @@ export default function RouteView() {
           if (isProcessingQrRef.current) return
           isProcessingQrRef.current = true
 
-          const payload = extractScanPayload(decodedText)
-          console.log('[Route] QR recibido:', payload)
+          const { code, raw } = extractScanPayload(decodedText)
+          const orders = route?.orders || []
+          console.log('[QR Match] Buscando:', code, 'en pedidos:',
+            orders.map(o => ({ trackingCode: o.trackingCode, orderNumber: o.orderNumber })))
 
-          // Buscar pedido por trackingCode primero, luego por id como fallback
-          const order = route?.orders?.find(o =>
-            (payload.tracking && o.trackingCode === payload.tracking) ||
-            (payload.id && o.id === payload.id)
+          // Match contra trackingCode, orderNumber o id
+          const order = orders.find(o =>
+            o.trackingCode === code ||
+            o.orderNumber === code ||
+            o.id === code
           )
 
           // Detener scanner ANTES de seguir: esperamos a que stop() resuelva
@@ -453,7 +460,7 @@ export default function RouteView() {
             showFlash(`\u2713 Pedido #${order.routePosition || ''} de ${order.customerName} - retiro confirmado`, 'success')
             confirmPickup(order.id)
           } else {
-            console.warn('[Route] QR sin match en la ruta actual:', payload.raw)
+            console.warn('[Route] QR sin match. Buscado:', code, 'raw:', raw)
             showFlash('QR no corresponde a ningun pedido de esta ruta', 'error')
           }
         },
