@@ -228,41 +228,34 @@ export default function TrackingPage() {
     return times
   }
 
-  // Calculate ETA as 4-hour range, capped at 23:00
+  // Calculate ETA window: inicio = max(routeStartedAt, now); fin = inicio + 4h; tope 23:00
   function getEtaRange() {
     if (!order) return null
     const ts = order.trackingStatus
+    // No mostrar si ya se entrego, se reprogramo, o la ruta todavia no arranco
     if (ts === 'delivered' || ts === 'rescheduled') return null
-    if (ts === 'preparing') return null
+    if (order.status === 'DELIVERED' || order.status === 'CANCELLED') return null
 
     const routeStartedAt = order.routeProgress?.startedAt
     if (!routeStartedAt) return { pending: true }
 
-    let center = null
+    const started = new Date(routeStartedAt)
+    const now = new Date()
+    // Si la hora de inicio ya paso, usar ahora como inicio de la ventana
+    const from = started.getTime() < now.getTime() ? now : started
 
-    if (order.estimatedArrival) {
-      center = new Date(order.estimatedArrival)
-    } else if (order.routeProgress?.position) {
-      const startTime = new Date(routeStartedAt)
-      const estimatedMinutes = order.routeProgress.position * 15
-      center = new Date(startTime.getTime() + estimatedMinutes * 60 * 1000)
-    }
+    // Tope maximo: 23:00 del mismo dia que el inicio
+    const cap = new Date(from)
+    cap.setHours(23, 0, 0, 0)
 
-    if (!center) return { pending: true }
-
-    const from = new Date(center.getTime() - 2 * 60 * 60 * 1000)
-    const to = new Date(center.getTime() + 2 * 60 * 60 * 1000)
-
-    // Cap at 23:00 of the same day
-    const limit = new Date(from)
-    limit.setHours(23, 0, 0, 0)
-
-    if (from.getTime() >= limit.getTime()) {
+    // Si el inicio ya paso las 23:00, la entrega se pasa al dia siguiente
+    if (from.getTime() >= cap.getTime()) {
       return { nextDay: true }
     }
 
-    if (to.getTime() > limit.getTime()) {
-      to.setHours(23, 0, 0, 0)
+    const to = new Date(from.getTime() + 4 * 60 * 60 * 1000)
+    if (to.getTime() > cap.getTime()) {
+      to.setTime(cap.getTime())
     }
 
     const fmt = (d) => d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
