@@ -129,7 +129,10 @@ export default function StoreOrders() {
     return true
   })
 
-  const selectableOrders = filteredOrders.filter(o => !o.logisticId)
+  // Todos los pedidos son seleccionables (para poder imprimir etiquetas de pedidos
+  // ya asignados a logistica). El backend de assign-logistics maneja solos los
+  // que todavia no estan asignados.
+  const selectableOrders = filteredOrders
   const allSelected = selectableOrders.length > 0 && selectableOrders.every(o => selected.has(o.id))
   const toggleAll = () => {
     if (allSelected || allAcrossPages) {
@@ -396,16 +399,14 @@ export default function StoreOrders() {
             ) : filteredOrders.length === 0 ? (
               <tr><td colSpan={8} className="p-8 text-center text-gray-500">{orders.length === 0 ? 'No hay pedidos. Importá desde Tiendanube, MercadoLibre o Excel.' : 'No se encontraron pedidos con esos filtros.'}</td></tr>
             ) : filteredOrders.map(order => {
-              const canSelect = !order.logisticId
               return (
-                <tr key={order.id} className={`table-row ${!canSelect ? 'opacity-60' : ''}`}>
+                <tr key={order.id} className="table-row">
                   <td className="p-3 pl-4">
                     <input
                       type="checkbox"
-                      checked={canSelect && selected.has(order.id)}
-                      onChange={() => canSelect && toggleSelect(order.id)}
-                      disabled={!canSelect}
-                      className="rounded border-navy-700 bg-navy-900 text-teal-500 disabled:opacity-30"
+                      checked={selected.has(order.id)}
+                      onChange={() => toggleSelect(order.id)}
+                      className="rounded border-navy-700 bg-navy-900 text-teal-500"
                     />
                   </td>
                   <td className="p-3">
