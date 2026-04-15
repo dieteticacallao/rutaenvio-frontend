@@ -52,6 +52,9 @@ export default function RouteView() {
   const [startingRoute, setStartingRoute] = useState(false)
   const [pickingUp, setPickingUp] = useState(null)
   const [scanModalOrder, setScanModalOrder] = useState(null)
+  const [globalScanOpen, setGlobalScanOpen] = useState(false)
+  const [flashMessage, setFlashMessage] = useState(null) // { text, type: 'success'|'error' }
+  const globalScannerRef = useRef(null)
   const [routeEstimate, setRouteEstimate] = useState(null)
   const [activeIdx, setActiveIdx] = useState(0)
   const [showAllOrders, setShowAllOrders] = useState(false)
@@ -342,6 +345,85 @@ export default function RouteView() {
       }
     }
   }, [scanModalOrder?.id])
+
+  // Global QR scanner: matches any order in the route by trackingCode or id
+  const closeGlobalScanner = () => {
+    if (globalScannerRef.current) {
+      globalScannerRef.current.stop().catch(() => {})
+      globalScannerRef.current.clear()
+      globalScannerRef.current = null
+    }
+    setGlobalScanOpen(false)
+  }
+
+  const showFlash = (text, type = 'success') => {
+    setFlashMessage({ text, type })
+    setTimeout(() => setFlashMessage(null), 3500)
+  }
+
+  useEffect(() => {
+    if (!globalScanOpen) return
+    const elementId = 'qr-reader-global'
+    const timer = setTimeout(() => {
+      const scanner = new Html5Qrcode(elementId)
+      globalScannerRef.current = scanner
+      scanner.start(
+        { facingMode: 'environment' },
+        {
+          fps: 10,
+          qrbox: (vw, vh) => {
+            const minEdge = Math.min(vw, vh)
+            const size = Math.max(180, Math.floor(minEdge * 0.7))
+            return { width: size, height: size }
+          },
+          aspectRatio: 1.0
+        },
+        (decodedText) => {
+          // Try JSON { trackingCode, id, orderId } or raw trackingCode / id
+          let parsedTracking = null
+          let parsedId = null
+          try {
+            const p = JSON.parse(decodedText)
+            parsedTracking = p.trackingCode || p.tracking || null
+            parsedId = p.orderId || p.id || null
+          } catch {
+            // not JSON, fallthrough to raw match
+          }
+          const raw = decodedText.trim()
+          const order = route?.orders?.find(o =>
+            (parsedTracking && o.trackingCode === parsedTracking) ||
+            (parsedId && o.id === parsedId) ||
+            o.trackingCode === raw ||
+            o.id === raw
+          )
+          scanner.stop().catch(() => {})
+          scanner.clear()
+          globalScannerRef.current = null
+          setGlobalScanOpen(false)
+          if (order) {
+            showFlash(`\u2713 Pedido #${order.routePosition || ''} de ${order.customerName} - retiro confirmado`, 'success')
+            confirmPickup(order.id)
+          } else {
+            showFlash('QR no corresponde a ningun pedido de esta ruta', 'error')
+          }
+        },
+        () => {}
+      ).catch(() => {
+        scanner.clear()
+        globalScannerRef.current = null
+        setGlobalScanOpen(false)
+        showFlash('No se pudo abrir la camara', 'error')
+      })
+    }, 100)
+    return () => {
+      clearTimeout(timer)
+      if (globalScannerRef.current) {
+        globalScannerRef.current.stop().catch(() => {})
+        globalScannerRef.current.clear()
+        globalScannerRef.current = null
+      }
+    }
+  }, [globalScanOpen])
 
   const startRoute = async () => {
     setStartingRoute(true)
@@ -1001,6 +1083,72 @@ export default function RouteView() {
           Powered by <span className="text-brand-400 font-semibold">RutaEnvio</span>
         </div>
       </div>
+
+      {/* Flash message (scan feedback) */}
+      {flashMessage && (
+        <div
+          className={`fixed left-1/2 -translate-x-1/2 z-[10000] text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg max-w-[90vw] text-center ${
+            flashMessage.type === 'error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'
+          }`}
+          style={{ top: 'calc(1rem + env(safe-area-inset-top))' }}
+        >
+          {flashMessage.text}
+        </div>
+      )}
+
+      {/* Global QR scan FAB (pickup phase + active route) */}
+      {!allDone && (
+        <button
+          onClick={() => setGlobalScanOpen(true)}
+          aria-label="Escanear QR"
+          className="fixed right-4 z-[60] flex items-center gap-2 bg-brand-500 hover:bg-brand-600 active:bg-brand-600 text-white font-semibold rounded-full shadow-lg shadow-brand-900/40 active:scale-[0.97] transition-all"
+          style={{
+            bottom: 'calc(1rem + env(safe-area-inset-bottom))',
+            minHeight: '56px',
+            paddingLeft: '18px',
+            paddingRight: '20px'
+          }}
+        >
+          <ScanLine size={22} /> <span className="text-sm">Escanear QR</span>
+        </button>
+      )}
+
+      {/* Global QR Scanner Modal */}
+      {globalScanOpen && (
+        <div className="fixed inset-0 bg-black/90 z-[9999] flex items-end sm:items-center justify-center" onClick={closeGlobalScanner}>
+          <div
+            className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 flex flex-col"
+            style={{ maxHeight: '95dvh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-navy-800/50 flex-shrink-0">
+              <h3 className="text-sm font-bold text-white">Escanear QR del paquete</h3>
+              <button onClick={closeGlobalScanner} aria-label="Cerrar scanner" className="text-gray-500 hover:text-white flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center -mr-1">
+                <X size={22} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              <div id="qr-reader-global" className="w-full rounded-lg overflow-hidden bg-black" style={{ minHeight: '260px' }} />
+              <p className="text-gray-500 mt-2 text-center" style={{ fontSize: '12px' }}>
+                Apunta la camara al QR del paquete. Se confirmara el retiro automaticamente.
+              </p>
+            </div>
+
+            <div
+              className="border-t border-navy-800/50 px-4 pt-3 bg-navy-900 flex-shrink-0"
+              style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+            >
+              <button
+                onClick={closeGlobalScanner}
+                className="w-full flex items-center justify-center gap-1.5 min-h-[48px] rounded-lg bg-navy-800 text-gray-300 hover:bg-navy-700 active:bg-navy-700 transition-colors text-sm font-medium border border-navy-700"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* QR Scanner Modal */}
       {scanModalOrder && (
