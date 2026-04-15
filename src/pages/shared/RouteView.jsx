@@ -300,7 +300,15 @@ export default function RouteView() {
       scannerRef.current = scanner
       scanner.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        {
+          fps: 10,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const minEdge = Math.min(viewfinderWidth, viewfinderHeight)
+            const size = Math.max(180, Math.floor(minEdge * 0.7))
+            return { width: size, height: size }
+          },
+          aspectRatio: 1.0
+        },
         (decodedText) => {
           let orderId = null
           try {
@@ -580,14 +588,14 @@ export default function RouteView() {
         <div
           key={order.id}
           onClick={() => { if (routeStarted) { setActiveIdx(route.orders.indexOf(order)); setShowAllOrders(false) } }}
-          className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
+          className={`flex items-center gap-3 px-3 py-3 min-h-[56px] rounded-lg border transition-colors ${
             isDelivered ? 'bg-emerald-500/5 border-emerald-500/20 opacity-60' :
             order.status === 'RESCHEDULED' ? 'bg-amber-500/5 border-amber-500/20 opacity-60' :
             order.status === 'CANCELLED' ? 'bg-red-500/5 border-red-500/20 opacity-60' :
-            'bg-navy-900 border-navy-800 cursor-pointer hover:border-brand-500/30'
+            'bg-navy-900 border-navy-800 cursor-pointer hover:border-brand-500/30 active:border-brand-500/30'
           }`}
         >
-          <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${
+          <span className={`text-sm font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
             isDelivered ? 'bg-emerald-500/20 text-emerald-400' : 'bg-navy-800 text-gray-400'
           }`}>
             {isDelivered ? '\u2713' : order.routePosition}
@@ -596,12 +604,12 @@ export default function RouteView() {
             <div className={`text-sm font-medium truncate ${isDelivered ? 'line-through text-gray-500' : 'text-white'}`}>
               {order.customerName}
             </div>
-            <div className="text-[11px] text-gray-500 truncate">{order.address}</div>
+            <div className="text-gray-500 truncate" style={{ fontSize: '12px' }}>{order.address}</div>
           </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {isML && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">ML</span>}
-            {isTN && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">TN</span>}
-            <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${badgeCfg.color}`}>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {isML && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">ML</span>}
+            {isTN && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">TN</span>}
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${badgeCfg.color}`}>
               {badgeCfg.label}
             </span>
           </div>
@@ -637,11 +645,11 @@ export default function RouteView() {
           </div>
         </div>
 
-        <div className="text-base font-semibold text-white mb-1.5">{order.customerName}</div>
+        <div className="text-base font-semibold text-white mb-1.5 break-words">{order.customerName}</div>
 
         <div className="text-sm text-gray-400 flex items-start gap-1.5 mb-1">
-          <MapPin size={14} className="mt-0.5 flex-shrink-0" />
-          <span>
+          <MapPin size={15} className="mt-0.5 flex-shrink-0" />
+          <span className="break-words min-w-0">
             {order.address}
             {order.city ? `, ${order.city}` : ''}
             {order.addressDetail ? ` (${order.addressDetail})` : ''}
@@ -649,24 +657,24 @@ export default function RouteView() {
         </div>
 
         {order.customerPhone && (
-          <div className="flex items-center gap-2 mt-2">
-            <a href={`tel:${order.customerPhone}`} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-navy-800 text-brand-400 hover:bg-navy-700 transition-colors text-xs no-underline border border-navy-700">
-              <Phone size={12} /> Llamar
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            <a href={`tel:${order.customerPhone}`} className="flex items-center gap-1.5 px-3 min-h-[44px] rounded-lg bg-navy-800 text-brand-400 hover:bg-navy-700 active:bg-navy-700 transition-colors text-sm no-underline border border-navy-700 active:scale-[0.98]">
+              <Phone size={16} /> Llamar
             </a>
             <a
               href={`https://wa.me/${order.customerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${order.customerName}, soy tu repartidor de RutaEnvio. Estoy en camino con tu pedido #${order.orderNumber || ''}.`)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors text-xs no-underline border border-emerald-500/20"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 min-h-[44px] rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 active:bg-emerald-500/20 transition-colors text-sm no-underline border border-emerald-500/20 active:scale-[0.98] min-w-[140px]"
             >
-              <MessageCircle size={12} /> WhatsApp · Avisar al cliente
+              <MessageCircle size={16} /> WhatsApp
             </a>
           </div>
         )}
 
         {order.notes && (
-          <div className="text-xs text-amber-400/70 mt-2 bg-amber-500/5 rounded-lg px-2.5 py-1.5">
-            Nota: {order.notes}
+          <div className="text-amber-400/80 mt-3 bg-amber-500/5 rounded-lg px-3 py-2 border border-amber-500/10" style={{ fontSize: '13px' }}>
+            <span className="font-semibold">Nota:</span> {order.notes}
           </div>
         )}
 
@@ -692,9 +700,9 @@ export default function RouteView() {
             <button
               onClick={() => openScanner(order)}
               disabled={isPickingUpThis}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors text-sm font-medium disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 min-h-[48px] rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors text-sm font-medium disabled:opacity-50 active:scale-[0.98]"
             >
-              {isPickingUpThis ? <Loader2 size={14} className="animate-spin" /> : <ScanLine size={14} />}
+              {isPickingUpThis ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
               Escanear retiro
             </button>
             <button
@@ -704,9 +712,9 @@ export default function RouteView() {
                 }
               }}
               disabled={isPickingUpThis}
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-navy-800 text-amber-400 hover:bg-navy-700 transition-colors text-sm font-medium border border-amber-500/30 disabled:opacity-50"
+              className="flex items-center justify-center gap-1.5 px-3 min-h-[48px] rounded-lg bg-navy-800 text-amber-400 hover:bg-navy-700 transition-colors text-sm font-medium border border-amber-500/30 disabled:opacity-50 active:scale-[0.98]"
             >
-              {isPickingUpThis ? <Loader2 size={14} className="animate-spin" /> : <PackageCheck size={14} />}
+              {isPickingUpThis ? <Loader2 size={16} className="animate-spin" /> : <PackageCheck size={16} />}
               Retiro manual
             </button>
           </div>
@@ -732,11 +740,11 @@ export default function RouteView() {
           <div className="mt-3">
             <button
               onClick={() => navigateTo(order)}
-              className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-navy-800 text-white hover:bg-navy-950 transition-colors text-sm font-medium border border-navy-700"
+              className="w-full flex items-center justify-center gap-2 px-3 min-h-[48px] rounded-xl bg-navy-800 text-white hover:bg-navy-950 transition-colors text-sm font-medium border border-navy-700 active:scale-[0.98]"
             >
-              <Navigation size={16} /> Navegar
+              <Navigation size={18} /> Navegar
             </button>
-            <p className="text-[11px] text-gray-600 mt-1.5 text-center">Entrega gestionada por MercadoLibre Flex</p>
+            <p className="text-center text-gray-600 mt-1.5" style={{ fontSize: '12px' }}>Entrega gestionada por MercadoLibre Flex</p>
           </div>
         )}
 
@@ -746,35 +754,35 @@ export default function RouteView() {
             <div className="flex gap-2">
               <button
                 onClick={() => navigateTo(order)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-navy-800 text-white hover:bg-navy-950 transition-colors text-sm font-medium border border-navy-700"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 min-h-[52px] rounded-xl bg-navy-800 text-white hover:bg-navy-950 transition-colors text-sm font-medium border border-navy-700 active:scale-[0.98]"
               >
-                <Navigation size={15} /> Navegar
+                <Navigation size={18} /> Navegar
               </button>
               {isPickedUp && (
                 <button
                   onClick={() => markInTransit(order.id)}
                   disabled={isUpdating}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 min-h-[52px] rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 active:scale-[0.98]"
                 >
-                  {isUpdating ? <Loader2 size={15} className="animate-spin" /> : <Truck size={15} />}
+                  {isUpdating ? <Loader2 size={18} className="animate-spin" /> : <Truck size={18} />}
                   En camino
                 </button>
               )}
               {isTransit && (
                 <button
                   onClick={() => openDeliverModal(order)}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors text-sm font-medium"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 min-h-[52px] rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors text-sm font-medium active:scale-[0.98]"
                 >
-                  <CheckCircle2 size={15} /> Entregar
+                  <CheckCircle2 size={18} /> Entregar
                 </button>
               )}
             </div>
             <button
               onClick={() => openRescheduleModal(order)}
               disabled={isUpdating}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors text-xs font-medium border border-amber-500/20 disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-1.5 px-3 min-h-[48px] rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors text-sm font-medium border border-amber-500/20 disabled:opacity-50 active:scale-[0.98]"
             >
-              <CalendarClock size={13} /> Reprogramar para manana
+              <CalendarClock size={16} /> Reprogramar para manana
             </button>
           </div>
         )}
@@ -783,16 +791,16 @@ export default function RouteView() {
   }
 
   return (
-    <div className="min-h-screen bg-navy-950 pb-8">
+    <div className="route-view-root min-h-[100dvh] bg-navy-950 overflow-x-hidden">
       {/* Socket toast notification */}
       {socketToast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-emerald-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg animate-pulse max-w-sm text-center">
+        <div className="fixed left-1/2 -translate-x-1/2 z-[9999] bg-emerald-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg animate-pulse max-w-[90vw] text-center" style={{ top: 'calc(1rem + env(safe-area-inset-top))' }}>
           {socketToast}
         </div>
       )}
 
       {/* Header */}
-      <div className="bg-navy-900 border-b border-navy-800 px-4 py-3 sticky top-0 z-50">
+      <div className="bg-navy-900 border-b border-navy-800 px-4 sticky top-0 z-50" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
         <div className="max-w-2xl mx-auto">
           <h1 className="text-base font-bold text-white truncate">
             Ruta {route.driverName || ''} - {routeDate}
@@ -865,7 +873,7 @@ export default function RouteView() {
                     }
                   }}
                   disabled={startingRoute}
-                  className={`w-full flex items-center justify-center gap-2.5 py-4 rounded-xl text-white font-bold text-base transition-colors disabled:opacity-50 ${
+                  className={`w-full flex items-center justify-center gap-2.5 min-h-[56px] py-4 rounded-xl text-white font-bold text-base transition-colors disabled:opacity-50 active:scale-[0.98] ${
                     allPickedUp ? 'bg-brand-500 hover:bg-brand-600' : 'bg-amber-600 hover:bg-amber-700'
                   }`}
                 >
@@ -954,16 +962,16 @@ export default function RouteView() {
                   <button
                     onClick={() => setActiveIdx(Math.max(0, activeIdx - 1))}
                     disabled={activeIdx === 0}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-navy-900 text-gray-400 hover:text-white hover:bg-navy-800 transition-colors text-sm font-medium border border-navy-800 disabled:opacity-30 disabled:hover:text-gray-400 disabled:hover:bg-navy-900"
+                    className="flex-1 flex items-center justify-center gap-1.5 min-h-[48px] rounded-xl bg-navy-900 text-gray-400 hover:text-white hover:bg-navy-800 transition-colors text-sm font-medium border border-navy-800 disabled:opacity-30 disabled:hover:text-gray-400 disabled:hover:bg-navy-900 active:scale-[0.98]"
                   >
-                    <ChevronLeft size={16} /> Anterior
+                    <ChevronLeft size={18} /> Anterior
                   </button>
                   <button
                     onClick={() => setActiveIdx(Math.min(totalOrders - 1, activeIdx + 1))}
                     disabled={activeIdx === totalOrders - 1}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors text-sm font-medium border border-brand-500/20 disabled:opacity-30 disabled:hover:bg-brand-500/10"
+                    className="flex-1 flex items-center justify-center gap-1.5 min-h-[48px] rounded-xl bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors text-sm font-medium border border-brand-500/20 disabled:opacity-30 disabled:hover:bg-brand-500/10 active:scale-[0.98]"
                   >
-                    Siguiente <ChevronRight size={16} />
+                    Siguiente <ChevronRight size={18} />
                   </button>
                 </div>
               </>
@@ -973,9 +981,9 @@ export default function RouteView() {
             {!allDone && (
               <button
                 onClick={() => setShowAllOrders(!showAllOrders)}
-                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                className="w-full flex items-center justify-center gap-1.5 min-h-[44px] text-sm text-gray-500 hover:text-gray-300 active:text-gray-300 transition-colors"
               >
-                <List size={14} /> {showAllOrders ? 'Ocultar lista' : 'Ver todos los pedidos'}
+                <List size={16} /> {showAllOrders ? 'Ocultar lista' : 'Ver todos los pedidos'}
               </button>
             )}
 
@@ -989,27 +997,42 @@ export default function RouteView() {
         )}
 
         {/* Footer */}
-        <div className="text-center text-xs text-gray-700 mt-6 pb-4">
+        <div className="text-center text-gray-700 mt-6" style={{ fontSize: '12px', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
           Powered by <span className="text-brand-400 font-semibold">RutaEnvio</span>
         </div>
       </div>
 
       {/* QR Scanner Modal */}
       {scanModalOrder && (
-        <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={stopScanner}>
-          <div className="bg-navy-900 w-full max-w-sm rounded-2xl border border-navy-800 p-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-white">Escanear QR - Pedido #{scanModalOrder.routePosition}</h3>
-              <button onClick={stopScanner} className="text-gray-500 hover:text-white"><X size={18} /></button>
+        <div className="fixed inset-0 bg-black/90 z-[9999] flex items-end sm:items-center justify-center" onClick={stopScanner}>
+          <div
+            className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 flex flex-col"
+            style={{ maxHeight: '95dvh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-navy-800/50 flex-shrink-0">
+              <h3 className="text-sm font-bold text-white truncate pr-2">Escanear QR - Pedido #{scanModalOrder.routePosition}</h3>
+              <button onClick={stopScanner} aria-label="Cerrar scanner" className="text-gray-500 hover:text-white flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center -mr-1">
+                <X size={22} />
+              </button>
             </div>
-            <div id="qr-reader" className="w-full rounded-lg overflow-hidden" style={{ minHeight: '280px' }} />
-            <p className="text-[11px] text-gray-500 mt-2 text-center">Apunta la camara al codigo QR del paquete</p>
-            <button
-              onClick={() => { stopScanner(); confirmPickup(scanModalOrder.id) }}
-              className="w-full mt-3 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-navy-800 text-amber-400 hover:bg-navy-700 transition-colors text-xs font-medium border border-amber-500/30"
+
+            <div className="flex-1 overflow-y-auto p-4">
+              <div id="qr-reader" className="w-full rounded-lg overflow-hidden bg-black" style={{ minHeight: '260px' }} />
+              <p className="text-gray-500 mt-2 text-center" style={{ fontSize: '12px' }}>Apunta la camara al codigo QR del paquete</p>
+            </div>
+
+            <div
+              className="border-t border-navy-800/50 px-4 pt-3 bg-navy-900 flex-shrink-0"
+              style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
             >
-              <PackageCheck size={13} /> No puedo escanear, confirmar retiro manual
-            </button>
+              <button
+                onClick={() => { stopScanner(); confirmPickup(scanModalOrder.id) }}
+                className="w-full flex items-center justify-center gap-1.5 min-h-[48px] rounded-lg bg-navy-800 text-amber-400 hover:bg-navy-700 active:bg-navy-700 transition-colors text-sm font-medium border border-amber-500/30"
+              >
+                <PackageCheck size={16} /> No puedo escanear, confirmar manual
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1017,37 +1040,84 @@ export default function RouteView() {
       {/* Delivery Modal */}
       {deliverModal && (
         <div className="fixed inset-0 bg-black/70 z-[9999] flex items-end sm:items-center justify-center" onClick={() => !submitting && setDeliverModal(null)}>
-          <div className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 p-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-white">Confirmar entrega</h2>
-              <button onClick={() => !submitting && setDeliverModal(null)} className="text-gray-500 hover:text-white"><X size={20} /></button>
-            </div>
-            <p className="text-xs text-gray-400 mb-4">Pedido #{deliverModal.routePosition} - {deliverModal.customerName}</p>
-
-            <label className="block text-xs text-gray-400 mb-1">Nombre de quien recibe *</label>
-            <input type="text" value={receiverName} onChange={e => setReceiverName(e.target.value)} placeholder="Ej: Juan Perez" className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 mb-4" />
-
-            <label className="block text-xs text-gray-400 mb-1">DNI *</label>
-            <input type="text" inputMode="numeric" pattern="[0-9]*" value={receiverDni} onChange={e => setReceiverDni(e.target.value.replace(/\D/g, ''))} placeholder="Ej: 12345678" className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 mb-4" />
-
-            <label className="block text-xs text-gray-400 mb-1">Foto entrega (opcional)</label>
-            {!photoPreview ? (
-              <label className="flex items-center justify-center gap-2 w-full py-8 border-2 border-dashed border-navy-800 rounded-xl text-gray-500 hover:border-brand-500 hover:text-brand-400 transition-colors cursor-pointer mb-4">
-                <Camera size={20} /> <span className="text-sm">Sacar foto</span>
-                <input type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
-              </label>
-            ) : (
-              <div className="relative mb-4">
-                <img src={photoPreview} alt="Preview" className="w-full h-48 object-cover rounded-xl border border-navy-800" />
-                <button onClick={() => { setPhoto(null); setPhotoPreview(null) }} className="absolute top-2 right-2 bg-black/60 rounded-full p-1">
-                  <X size={16} className="text-white" />
-                </button>
+          <div
+            className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 flex flex-col"
+            style={{ maxHeight: '92dvh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Sticky header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-navy-800/50 flex-shrink-0">
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-white">Confirmar entrega</h2>
+                <p className="text-gray-400 truncate" style={{ fontSize: '13px' }}>Pedido #{deliverModal.routePosition} - {deliverModal.customerName}</p>
               </div>
-            )}
+              <button onClick={() => !submitting && setDeliverModal(null)} aria-label="Cerrar" className="text-gray-500 hover:text-white flex-shrink-0 -mr-1 min-w-[44px] min-h-[44px] flex items-center justify-center">
+                <X size={22} />
+              </button>
+            </div>
 
-            <button onClick={confirmDelivery} disabled={submitting || !receiverName.trim() || !receiverDni.trim()} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50">
-              {submitting ? (<><Loader2 size={16} className="animate-spin" /> Confirmando...</>) : (<><CheckCircle2 size={16} /> Confirmar entrega</>)}
-            </button>
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              <div>
+                <label className="block text-gray-400 mb-1.5" style={{ fontSize: '13px' }}>Nombre de quien recibe *</label>
+                <input
+                  type="text"
+                  value={receiverName}
+                  onChange={e => setReceiverName(e.target.value)}
+                  onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
+                  placeholder="Ej: Juan Perez"
+                  autoComplete="name"
+                  className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500"
+                  style={{ fontSize: '16px', minHeight: '48px' }}
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-400 mb-1.5" style={{ fontSize: '13px' }}>DNI *</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={receiverDni}
+                  onChange={e => setReceiverDni(e.target.value.replace(/\D/g, ''))}
+                  onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
+                  placeholder="Ej: 12345678"
+                  className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500"
+                  style={{ fontSize: '16px', minHeight: '48px' }}
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-400 mb-1.5" style={{ fontSize: '13px' }}>Foto entrega (opcional)</label>
+                {!photoPreview ? (
+                  <label className="flex items-center justify-center gap-2 w-full py-6 border-2 border-dashed border-navy-800 rounded-xl text-gray-500 hover:border-brand-500 hover:text-brand-400 active:border-brand-500 transition-colors cursor-pointer">
+                    <Camera size={22} /> <span className="text-sm">Sacar foto</span>
+                    <input type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
+                  </label>
+                ) : (
+                  <div className="relative">
+                    <img src={photoPreview} alt="Preview" className="w-full h-48 object-cover rounded-xl border border-navy-800" />
+                    <button onClick={() => { setPhoto(null); setPhotoPreview(null) }} aria-label="Quitar foto" className="absolute top-2 right-2 bg-black/70 rounded-full min-w-[36px] min-h-[36px] flex items-center justify-center">
+                      <X size={18} className="text-white" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Sticky footer with action button (safe-area aware) */}
+            <div
+              className="border-t border-navy-800/50 px-5 pt-3 bg-navy-900 flex-shrink-0"
+              style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+            >
+              <button
+                onClick={confirmDelivery}
+                disabled={submitting || !receiverName.trim() || !receiverDni.trim()}
+                className="w-full flex items-center justify-center gap-2 min-h-[52px] rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 active:scale-[0.98]"
+              >
+                {submitting ? (<><Loader2 size={18} className="animate-spin" /> Confirmando...</>) : (<><CheckCircle2 size={18} /> Confirmar entrega</>)}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1055,53 +1125,75 @@ export default function RouteView() {
       {/* Reschedule Modal */}
       {rescheduleModal && (
         <div className="fixed inset-0 bg-black/70 z-[9999] flex items-end sm:items-center justify-center" onClick={() => !submittingReschedule && setRescheduleModal(null)}>
-          <div className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 p-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <CalendarClock size={18} className="text-amber-400" /> Reprogramar pedido
-              </h2>
-              <button onClick={() => !submittingReschedule && setRescheduleModal(null)} className="text-gray-500 hover:text-white"><X size={20} /></button>
-            </div>
-            <p className="text-xs text-gray-400 mb-4">Pedido #{rescheduleModal.routePosition} - {rescheduleModal.customerName}</p>
-
-            <label className="block text-xs text-gray-400 mb-1">Motivo de reprogramacion *</label>
-            <textarea
-              value={rescheduleReason}
-              onChange={e => setRescheduleReason(e.target.value)}
-              placeholder="Ej: No habia nadie en el domicilio"
-              rows={3}
-              className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500 mb-4 resize-none"
-            />
-
-            <label className="block text-xs text-gray-400 mb-1">Foto (opcional)</label>
-            {!reschedulePhotoPreview ? (
-              <label className="flex items-center justify-center gap-2 w-full py-8 border-2 border-dashed border-navy-800 rounded-xl text-gray-500 hover:border-amber-500 hover:text-amber-400 transition-colors cursor-pointer mb-4">
-                <Camera size={20} /> <span className="text-sm">Sacar foto</span>
-                <input type="file" accept="image/*" capture="environment" onChange={handleReschedulePhoto} className="hidden" />
-              </label>
-            ) : (
-              <div className="relative mb-4">
-                <img src={reschedulePhotoPreview} alt="Preview" className="w-full h-48 object-cover rounded-xl border border-navy-800" />
-                <button onClick={() => { setReschedulePhoto(null); setReschedulePhotoPreview(null) }} className="absolute top-2 right-2 bg-black/60 rounded-full p-1">
-                  <X size={16} className="text-white" />
-                </button>
+          <div
+            className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 flex flex-col"
+            style={{ maxHeight: '92dvh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Sticky header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-navy-800/50 flex-shrink-0">
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <CalendarClock size={18} className="text-amber-400" /> Reprogramar pedido
+                </h2>
+                <p className="text-gray-400 truncate mt-0.5" style={{ fontSize: '13px' }}>Pedido #{rescheduleModal.routePosition} - {rescheduleModal.customerName}</p>
               </div>
-            )}
+              <button onClick={() => !submittingReschedule && setRescheduleModal(null)} aria-label="Cerrar" className="text-gray-500 hover:text-white flex-shrink-0 -mr-1 min-w-[44px] min-h-[44px] flex items-center justify-center">
+                <X size={22} />
+              </button>
+            </div>
 
-            <div className="flex gap-2">
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              <div>
+                <label className="block text-gray-400 mb-1.5" style={{ fontSize: '13px' }}>Motivo de reprogramacion *</label>
+                <textarea
+                  value={rescheduleReason}
+                  onChange={e => setRescheduleReason(e.target.value)}
+                  onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
+                  placeholder="Ej: No habia nadie en el domicilio"
+                  rows={3}
+                  className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500 resize-none"
+                  style={{ fontSize: '16px' }}
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-400 mb-1.5" style={{ fontSize: '13px' }}>Foto (opcional)</label>
+                {!reschedulePhotoPreview ? (
+                  <label className="flex items-center justify-center gap-2 w-full py-6 border-2 border-dashed border-navy-800 rounded-xl text-gray-500 hover:border-amber-500 hover:text-amber-400 active:border-amber-500 transition-colors cursor-pointer">
+                    <Camera size={22} /> <span className="text-sm">Sacar foto</span>
+                    <input type="file" accept="image/*" capture="environment" onChange={handleReschedulePhoto} className="hidden" />
+                  </label>
+                ) : (
+                  <div className="relative">
+                    <img src={reschedulePhotoPreview} alt="Preview" className="w-full h-48 object-cover rounded-xl border border-navy-800" />
+                    <button onClick={() => { setReschedulePhoto(null); setReschedulePhotoPreview(null) }} aria-label="Quitar foto" className="absolute top-2 right-2 bg-black/70 rounded-full min-w-[36px] min-h-[36px] flex items-center justify-center">
+                      <X size={18} className="text-white" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Sticky footer */}
+            <div
+              className="border-t border-navy-800/50 px-5 pt-3 bg-navy-900 flex gap-2 flex-shrink-0"
+              style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+            >
               <button
                 onClick={() => setRescheduleModal(null)}
                 disabled={submittingReschedule}
-                className="flex-1 py-3 rounded-xl bg-navy-800 text-gray-300 font-semibold text-sm hover:bg-navy-700 transition-colors disabled:opacity-50"
+                className="flex-1 min-h-[52px] rounded-xl bg-navy-800 text-gray-300 font-semibold text-sm hover:bg-navy-700 transition-colors disabled:opacity-50 active:scale-[0.98]"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmReschedule}
                 disabled={submittingReschedule || !rescheduleReason.trim()}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-600 text-white font-semibold text-sm hover:bg-amber-700 transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 min-h-[52px] rounded-xl bg-amber-600 text-white font-semibold text-sm hover:bg-amber-700 transition-colors disabled:opacity-50 active:scale-[0.98]"
               >
-                {submittingReschedule ? (<><Loader2 size={16} className="animate-spin" /> Enviando...</>) : (<><CalendarClock size={16} /> Confirmar reprogramacion</>)}
+                {submittingReschedule ? (<><Loader2 size={18} className="animate-spin" /> Enviando...</>) : (<><CalendarClock size={18} /> Confirmar</>)}
               </button>
             </div>
           </div>
@@ -1109,13 +1201,18 @@ export default function RouteView() {
       )}
 
       <style>{`
+        html, body { overflow-x: hidden; }
+        .route-view-root { -webkit-tap-highlight-color: transparent; }
+        .route-view-root button, .route-view-root a { touch-action: manipulation; }
         .leaflet-container { background: #111829 !important; }
         .leaflet-control-attribution { display: none !important; }
-        #qr-reader video { border-radius: 8px; }
-        #qr-reader { border: none !important; }
-        #qr-reader__scan_region { background: transparent !important; }
-        #qr-reader__dashboard { background: transparent !important; }
-        #qr-reader__dashboard button { background: #1e293b !important; color: #e2e8f0 !important; border: 1px solid #334155 !important; border-radius: 8px !important; padding: 8px 16px !important; }
+        #qr-reader { border: none !important; width: 100% !important; }
+        #qr-reader video { border-radius: 8px; width: 100% !important; height: auto !important; max-height: 60vh; object-fit: cover; }
+        #qr-reader__scan_region { background: transparent !important; min-height: 260px; }
+        #qr-reader__scan_region img { display: none; }
+        #qr-reader__dashboard { background: transparent !important; padding-top: 8px !important; }
+        #qr-reader__dashboard button { background: #1e293b !important; color: #e2e8f0 !important; border: 1px solid #334155 !important; border-radius: 8px !important; padding: 10px 16px !important; min-height: 44px; font-size: 14px !important; }
+        #qr-reader__camera_selection { background: #1e293b !important; color: #e2e8f0 !important; border: 1px solid #334155 !important; border-radius: 8px !important; padding: 8px !important; font-size: 14px !important; min-height: 44px; max-width: 100%; }
       `}</style>
     </div>
   )
