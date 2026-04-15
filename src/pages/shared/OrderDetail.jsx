@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { api, STATUS_MAP } from '../../lib/store'
+import { api, STATUS_MAP, useAuth } from '../../lib/store'
 import { ArrowLeft, MapPin, Phone, User, Package, Clock, Star, MessageSquare, Camera, Loader2, FileText, Copy, MessageCircle, Link2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -21,6 +21,8 @@ function formatDate(d) {
 export default function OrderDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isLogistics = user?.role === 'LOGISTICS_ADMIN'
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -222,42 +224,54 @@ export default function OrderDetail() {
         )}
       </div>
 
-      {/* Detalles del pedido */}
-      <div className="card-p space-y-3">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Detalles del pedido</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          {order.itemsSummary && (
-            <div>
-              <p className="text-gray-500">Productos</p>
-              <p className="text-gray-200">{order.itemsSummary}</p>
-            </div>
-          )}
-          {order.itemCount > 0 && (
-            <div>
-              <p className="text-gray-500">Cantidad</p>
-              <p className="text-gray-200">{order.itemCount} items</p>
-            </div>
-          )}
-          {order.totalAmount != null && (
-            <div>
-              <p className="text-gray-500">Monto</p>
-              <p className="text-gray-200">${order.totalAmount} {order.currency}</p>
-            </div>
-          )}
-          {order.weight != null && (
-            <div>
-              <p className="text-gray-500">Peso</p>
-              <p className="text-gray-200">{order.weight} kg</p>
+      {/* Detalles del pedido (oculto para logistica: no ven productos/montos) */}
+      {!isLogistics && (
+        <div className="card-p space-y-3">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Detalles del pedido</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            {order.itemsSummary && (
+              <div>
+                <p className="text-gray-500">Productos</p>
+                <p className="text-gray-200">{order.itemsSummary}</p>
+              </div>
+            )}
+            {order.itemCount > 0 && (
+              <div>
+                <p className="text-gray-500">Cantidad</p>
+                <p className="text-gray-200">{order.itemCount} items</p>
+              </div>
+            )}
+            {order.totalAmount != null && (
+              <div>
+                <p className="text-gray-500">Monto</p>
+                <p className="text-gray-200">${order.totalAmount} {order.currency}</p>
+              </div>
+            )}
+            {order.weight != null && (
+              <div>
+                <p className="text-gray-500">Peso</p>
+                <p className="text-gray-200">{order.weight} kg</p>
+              </div>
+            )}
+          </div>
+          {order.notes && (
+            <div className="flex items-start gap-2 text-gray-300 mt-2">
+              <FileText size={14} className="text-gray-500 mt-0.5 shrink-0" />
+              <p className="text-sm">{order.notes}</p>
             </div>
           )}
         </div>
-        {order.notes && (
-          <div className="flex items-start gap-2 text-gray-300 mt-2">
-            <FileText size={14} className="text-gray-500 mt-0.5 shrink-0" />
-            <p className="text-sm">{order.notes}</p>
-          </div>
-        )}
-      </div>
+      )}
+
+      {/* Notas/instrucciones de entrega (logistica: las necesita para el reparto) */}
+      {isLogistics && order.notes && (
+        <div className="card-p space-y-2">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+            <FileText size={14} /> Instrucciones de entrega
+          </h2>
+          <p className="text-sm text-gray-200">{order.notes}</p>
+        </div>
+      )}
 
       {/* Prueba de entrega */}
       {(order.deliveryPhoto || order.receiverName || order.deliveryNotes || order.deliverySignature) && (

@@ -263,9 +263,23 @@ export default function RoutesHistory() {
               <Package size={16} className="text-amber-400" /> Pedidos ({totalOrders})
             </h3>
             <div className="space-y-1">
-              {selectedRoute.orders?.map(order => {
-                const st = STATUS_MAP[order.status] || { label: order.status, color: 'badge-pending' }
-                const trackingLink = order.trackingCode ? `https://rutaenvio-frontend.vercel.app/track/${order.trackingCode}` : null
+              {(() => {
+                const routeActive = !!selectedRoute.startedAt && computeRouteStatus(selectedRoute) !== 'COMPLETED' && computeRouteStatus(selectedRoute) !== 'CANCELLED'
+                const inRouteStatuses = ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED']
+                const terminalStatuses = ['DELIVERED', 'CANCELLED', 'RESCHEDULED', 'FAILED']
+                const nextOrder = routeActive
+                  ? (selectedRoute.orders || []).find(o => !o.isRescheduled && !terminalStatuses.includes(o.status))
+                  : null
+                return selectedRoute.orders?.map(order => {
+                  let st = STATUS_MAP[order.status] || { label: order.status, color: 'badge-pending' }
+                  if (routeActive && !order.isRescheduled && !terminalStatuses.includes(order.status)) {
+                    if (nextOrder && order.id === nextOrder.id) {
+                      st = { label: 'En camino', color: 'badge-transit' }
+                    } else if (inRouteStatuses.includes(order.status)) {
+                      st = { label: 'En ruta', color: 'badge-transit' }
+                    }
+                  }
+                  const trackingLink = order.trackingCode ? `https://rutaenvio-frontend.vercel.app/track/${order.trackingCode}` : null
                 return (
                   <div key={order.id} className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-navy-800/50 cursor-pointer group" onClick={() => navigate(`/orders/${order.id}`)}>
                     <div className="w-6 h-6 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center text-xs font-bold flex-shrink-0">
@@ -333,7 +347,8 @@ export default function RoutesHistory() {
                     </div>
                   </div>
                 )
-              })}
+                })
+              })()}
             </div>
           </div>
 
