@@ -298,7 +298,15 @@ export default function RouteView() {
   useEffect(() => {
     if (!scanModalOrder) return
     const elementId = 'qr-reader'
+    // 300ms: dar tiempo a que el modal termine de montar en DOM en mobile lento
     const timer = setTimeout(() => {
+      const container = document.getElementById(elementId)
+      if (!container) return
+      // Forzar dimensiones en pixeles explicitas (html5-qrcode necesita width/height
+      // concretos al iniciar, no porcentajes)
+      const w = Math.min(window.innerWidth - 48, 360)
+      container.style.width = w + 'px'
+      container.style.height = w + 'px'
       const scanner = new Html5Qrcode(elementId)
       scannerRef.current = scanner
       scanner.start(
@@ -335,7 +343,7 @@ export default function RouteView() {
         scannerRef.current = null
         setScanModalOrder(null)
       })
-    }, 100)
+    }, 300)
     return () => {
       clearTimeout(timer)
       if (scannerRef.current) {
@@ -365,6 +373,11 @@ export default function RouteView() {
     if (!globalScanOpen) return
     const elementId = 'qr-reader-global'
     const timer = setTimeout(() => {
+      const container = document.getElementById(elementId)
+      if (!container) return
+      const w = Math.min(window.innerWidth - 48, 360)
+      container.style.width = w + 'px'
+      container.style.height = w + 'px'
       const scanner = new Html5Qrcode(elementId)
       globalScannerRef.current = scanner
       scanner.start(
@@ -412,9 +425,9 @@ export default function RouteView() {
         scanner.clear()
         globalScannerRef.current = null
         setGlobalScanOpen(false)
-        showFlash('No se pudo abrir la camara', 'error')
+        showFlash('No se pudo abrir la camara. Revisa los permisos.', 'error')
       })
-    }, 100)
+    }, 300)
     return () => {
       clearTimeout(timer)
       if (globalScannerRef.current) {
@@ -1115,22 +1128,27 @@ export default function RouteView() {
 
       {/* Global QR Scanner Modal */}
       {globalScanOpen && (
-        <div className="fixed inset-0 bg-black/90 z-[9999] flex items-end sm:items-center justify-center" onClick={closeGlobalScanner}>
+        <div
+          className="fixed bg-black/90 z-[9999] flex items-end sm:items-center justify-center"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, touchAction: 'manipulation' }}
+          onClick={closeGlobalScanner}
+        >
           <div
             className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 flex flex-col"
-            style={{ maxHeight: '95dvh' }}
+            style={{ maxHeight: '95dvh', touchAction: 'manipulation' }}
             onClick={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-navy-800/50 flex-shrink-0">
               <h3 className="text-sm font-bold text-white">Escanear QR del paquete</h3>
-              <button onClick={closeGlobalScanner} aria-label="Cerrar scanner" className="text-gray-500 hover:text-white flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center -mr-1">
+              <button onClick={closeGlobalScanner} aria-label="Cerrar scanner" style={{ touchAction: 'manipulation' }} className="text-gray-500 hover:text-white flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center -mr-1">
                 <X size={22} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
-              <div id="qr-reader-global" className="w-full rounded-lg overflow-hidden bg-black" style={{ minHeight: '260px' }} />
-              <p className="text-gray-500 mt-2 text-center" style={{ fontSize: '12px' }}>
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center">
+              <div id="qr-reader-global" className="rounded-lg overflow-hidden bg-black" style={{ minHeight: '260px', minWidth: '260px' }} />
+              <p className="text-gray-500 mt-3 text-center" style={{ fontSize: '12px' }}>
                 Apunta la camara al QR del paquete. Se confirmara el retiro automaticamente.
               </p>
             </div>
@@ -1141,6 +1159,7 @@ export default function RouteView() {
             >
               <button
                 onClick={closeGlobalScanner}
+                style={{ touchAction: 'manipulation' }}
                 className="w-full flex items-center justify-center gap-1.5 min-h-[48px] rounded-lg bg-navy-800 text-gray-300 hover:bg-navy-700 active:bg-navy-700 transition-colors text-sm font-medium border border-navy-700"
               >
                 Cancelar
@@ -1152,22 +1171,27 @@ export default function RouteView() {
 
       {/* QR Scanner Modal */}
       {scanModalOrder && (
-        <div className="fixed inset-0 bg-black/90 z-[9999] flex items-end sm:items-center justify-center" onClick={stopScanner}>
+        <div
+          className="fixed bg-black/90 z-[9999] flex items-end sm:items-center justify-center"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, touchAction: 'manipulation' }}
+          onClick={stopScanner}
+        >
           <div
             className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 flex flex-col"
-            style={{ maxHeight: '95dvh' }}
+            style={{ maxHeight: '95dvh', touchAction: 'manipulation' }}
             onClick={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-navy-800/50 flex-shrink-0">
               <h3 className="text-sm font-bold text-white truncate pr-2">Escanear QR - Pedido #{scanModalOrder.routePosition}</h3>
-              <button onClick={stopScanner} aria-label="Cerrar scanner" className="text-gray-500 hover:text-white flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center -mr-1">
+              <button onClick={stopScanner} aria-label="Cerrar scanner" style={{ touchAction: 'manipulation' }} className="text-gray-500 hover:text-white flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center -mr-1">
                 <X size={22} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
-              <div id="qr-reader" className="w-full rounded-lg overflow-hidden bg-black" style={{ minHeight: '260px' }} />
-              <p className="text-gray-500 mt-2 text-center" style={{ fontSize: '12px' }}>Apunta la camara al codigo QR del paquete</p>
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center">
+              <div id="qr-reader" className="rounded-lg overflow-hidden bg-black" style={{ minHeight: '260px', minWidth: '260px' }} />
+              <p className="text-gray-500 mt-3 text-center" style={{ fontSize: '12px' }}>Apunta la camara al codigo QR del paquete</p>
             </div>
 
             <div
@@ -1176,6 +1200,7 @@ export default function RouteView() {
             >
               <button
                 onClick={() => { stopScanner(); confirmPickup(scanModalOrder.id) }}
+                style={{ touchAction: 'manipulation' }}
                 className="w-full flex items-center justify-center gap-1.5 min-h-[48px] rounded-lg bg-navy-800 text-amber-400 hover:bg-navy-700 active:bg-navy-700 transition-colors text-sm font-medium border border-amber-500/30"
               >
                 <PackageCheck size={16} /> No puedo escanear, confirmar manual
@@ -1187,11 +1212,16 @@ export default function RouteView() {
 
       {/* Delivery Modal */}
       {deliverModal && (
-        <div className="fixed inset-0 bg-black/70 z-[9999] flex items-end sm:items-center justify-center" onClick={() => !submitting && setDeliverModal(null)}>
+        <div
+          className="fixed bg-black/70 z-[9999] flex items-end sm:items-center justify-center"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, touchAction: 'manipulation' }}
+          onClick={() => !submitting && setDeliverModal(null)}
+        >
           <div
             className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 flex flex-col"
-            style={{ maxHeight: '92dvh' }}
+            style={{ maxHeight: '92dvh', touchAction: 'manipulation' }}
             onClick={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}
           >
             {/* Sticky header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-navy-800/50 flex-shrink-0">
@@ -1272,11 +1302,16 @@ export default function RouteView() {
 
       {/* Reschedule Modal */}
       {rescheduleModal && (
-        <div className="fixed inset-0 bg-black/70 z-[9999] flex items-end sm:items-center justify-center" onClick={() => !submittingReschedule && setRescheduleModal(null)}>
+        <div
+          className="fixed bg-black/70 z-[9999] flex items-end sm:items-center justify-center"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, touchAction: 'manipulation' }}
+          onClick={() => !submittingReschedule && setRescheduleModal(null)}
+        >
           <div
             className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 flex flex-col"
-            style={{ maxHeight: '92dvh' }}
+            style={{ maxHeight: '92dvh', touchAction: 'manipulation' }}
             onClick={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}
           >
             {/* Sticky header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-navy-800/50 flex-shrink-0">
@@ -1351,16 +1386,17 @@ export default function RouteView() {
       <style>{`
         html, body { overflow-x: hidden; }
         .route-view-root { -webkit-tap-highlight-color: transparent; }
-        .route-view-root button, .route-view-root a { touch-action: manipulation; }
+        .route-view-root button, .route-view-root a, .route-view-root input, .route-view-root textarea, .route-view-root label { touch-action: manipulation; }
         .leaflet-container { background: #111829 !important; }
         .leaflet-control-attribution { display: none !important; }
-        #qr-reader { border: none !important; width: 100% !important; }
-        #qr-reader video { border-radius: 8px; width: 100% !important; height: auto !important; max-height: 60vh; object-fit: cover; }
-        #qr-reader__scan_region { background: transparent !important; min-height: 260px; }
-        #qr-reader__scan_region img { display: none; }
-        #qr-reader__dashboard { background: transparent !important; padding-top: 8px !important; }
-        #qr-reader__dashboard button { background: #1e293b !important; color: #e2e8f0 !important; border: 1px solid #334155 !important; border-radius: 8px !important; padding: 10px 16px !important; min-height: 44px; font-size: 14px !important; }
-        #qr-reader__camera_selection { background: #1e293b !important; color: #e2e8f0 !important; border: 1px solid #334155 !important; border-radius: 8px !important; padding: 8px !important; font-size: 14px !important; min-height: 44px; max-width: 100%; }
+        /* QR reader: dimensiones en pixeles se setean via JS (window.innerWidth) al abrir */
+        #qr-reader, #qr-reader-global { border: none !important; }
+        #qr-reader video, #qr-reader-global video { border-radius: 8px; width: 100% !important; height: 100% !important; object-fit: cover; display: block; }
+        #qr-reader__scan_region, #qr-reader-global__scan_region { background: transparent !important; }
+        #qr-reader__scan_region img, #qr-reader-global__scan_region img { display: none; }
+        #qr-reader__dashboard, #qr-reader-global__dashboard { background: transparent !important; padding-top: 8px !important; }
+        #qr-reader__dashboard button, #qr-reader-global__dashboard button { background: #1e293b !important; color: #e2e8f0 !important; border: 1px solid #334155 !important; border-radius: 8px !important; padding: 10px 16px !important; min-height: 44px; font-size: 14px !important; touch-action: manipulation; }
+        #qr-reader__camera_selection, #qr-reader-global__camera_selection { background: #1e293b !important; color: #e2e8f0 !important; border: 1px solid #334155 !important; border-radius: 8px !important; padding: 8px !important; font-size: 14px !important; min-height: 44px; max-width: 100%; }
       `}</style>
     </div>
   )
