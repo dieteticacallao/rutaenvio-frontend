@@ -176,7 +176,16 @@ export default function StoreOrders() {
       toast('Los pedidos de MercadoLibre no requieren etiqueta', { icon: 'ℹ️' })
       return
     }
-    const ids = Array.from(selected)
+    // En modo cross-page no tenemos todos los pedidos cargados, pasamos todos
+    // los IDs seleccionados y el backend filtra los ML. Si no es cross-page,
+    // filtramos en el front para ser explicitos.
+    const ids = allAcrossPages
+      ? Array.from(selected)
+      : safeOrders.filter(o => selected.has(o.id) && o.source !== 'MERCADOLIBRE').map(o => o.id)
+    if (ids.length === 0) {
+      toast('Los pedidos de MercadoLibre no requieren etiqueta', { icon: 'ℹ️' })
+      return
+    }
     const token = localStorage.getItem('token')
     const base = api.defaults.baseURL
     const url = `${base}/orders/labels?ids=${ids.join(',')}&token=${encodeURIComponent(token || '')}`
@@ -263,45 +272,29 @@ export default function StoreOrders() {
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setShowAssignModal(true)}
-          disabled={selected.size === 0}
-          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-500 text-white hover:bg-teal-600 transition-colors disabled:bg-teal-500/10 disabled:text-teal-400/60 disabled:cursor-not-allowed"
-        >
-          <Truck size={14} /> Asignar {selected.size > 0 ? `${selected.size} pedido${selected.size !== 1 ? 's' : ''}` : 'a logistica'}
-        </button>
-      </div>
-
-      {/* Bulk action bar: aparece cuando hay pedidos seleccionados */}
-      {selected.size > 0 && (
-        <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg bg-teal-500/10 border border-teal-500/30">
-          <span className="text-sm text-gray-200">
-            <strong className="text-white">{selected.size}</strong> pedido{selected.size !== 1 ? 's' : ''} seleccionado{selected.size !== 1 ? 's' : ''}
-            {!allAcrossPages && nonMLSelectedVisible.length < selected.size && nonMLSelectedVisible.length > 0 && (
-              <span className="text-xs text-gray-400 ml-2">({selected.size - nonMLSelectedVisible.length} de ML sin etiqueta)</span>
-            )}
-          </span>
-          <div className="flex items-center gap-2 flex-wrap">
-            {!allVisibleSelectedAreML && (
-              <button
-                onClick={handlePrintLabels}
-                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors font-medium"
-                title={allAcrossPages
-                  ? 'Imprimir etiquetas (se excluiran los de ML)'
-                  : `Imprimir ${nonMLSelectedVisible.length} etiqueta${nonMLSelectedVisible.length !== 1 ? 's' : ''}`}
-              >
-                <Printer size={14} /> Imprimir etiquetas{allAcrossPages ? '' : ` (${nonMLSelectedVisible.length})`}
-              </button>
-            )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {selected.size > 0 && (
             <button
-              onClick={clearSelection}
-              className="text-xs text-gray-400 hover:text-white underline"
+              onClick={handlePrintLabels}
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors font-medium"
+              title={allVisibleSelectedAreML
+                ? 'Los pedidos de MercadoLibre no requieren etiqueta'
+                : allAcrossPages
+                  ? 'Imprimir etiquetas (se excluiran los de ML)'
+                  : `Imprimir ${nonMLSelectedVisible.length} etiqueta${nonMLSelectedVisible.length !== 1 ? 's' : ''}${nonMLSelectedVisible.length < selected.size ? ' (se omiten los de ML)' : ''}`}
             >
-              Limpiar
+              <Printer size={14} /> Imprimir etiquetas
             </button>
-          </div>
+          )}
+          <button
+            onClick={() => setShowAssignModal(true)}
+            disabled={selected.size === 0}
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-500 text-white hover:bg-teal-600 transition-colors disabled:bg-teal-500/10 disabled:text-teal-400/60 disabled:cursor-not-allowed"
+          >
+            <Truck size={14} /> Asignar {selected.size > 0 ? `${selected.size} pedido${selected.size !== 1 ? 's' : ''}` : 'a logistica'}
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Platform filter chips */}
       <div className="flex gap-1.5 flex-wrap items-center">
