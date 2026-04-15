@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP } from '../../lib/store'
-import { Package, Plus, Download, Search, X, MapPin, Loader2, Truck, Eye, FileSpreadsheet, ChevronDown, Cloud, ShoppingBag, ShoppingCart, Trash2 } from 'lucide-react'
+import { Package, Plus, Download, Search, X, MapPin, Loader2, Truck, Eye, FileSpreadsheet, ChevronDown, Cloud, ShoppingBag, ShoppingCart, Trash2, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
 import OrderModal from '../../components/shared/OrderModal'
 import ExcelImportModal from '../../components/shared/ExcelImportModal'
@@ -164,6 +164,25 @@ export default function StoreOrders() {
     setAllAcrossPages(false)
   }
 
+  // Ids no-ML entre los seleccionados visibles. En cross-page no podemos saber
+  // cuales son ML sin traerlos, pero el backend filtra los ML automaticamente.
+  const nonMLSelectedVisible = safeOrders.filter(o => selected.has(o.id) && o.source !== 'MERCADOLIBRE')
+  const allVisibleSelectedAreML = !allAcrossPages && selected.size > 0 &&
+    safeOrders.filter(o => selected.has(o.id)).every(o => o.source === 'MERCADOLIBRE')
+
+  const handlePrintLabels = () => {
+    if (selected.size === 0) return
+    if (allVisibleSelectedAreML) {
+      toast('Los pedidos de MercadoLibre no requieren etiqueta', { icon: 'ℹ️' })
+      return
+    }
+    const ids = Array.from(selected)
+    const token = localStorage.getItem('token')
+    const base = api.defaults.baseURL
+    const url = `${base}/orders/labels?ids=${ids.join(',')}&token=${encodeURIComponent(token || '')}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
   // Count of orders selectable across all pages (approximated: backend /orders returns "total" with current status filter).
   // We already pass unassignedOnly to /ids, so we'll use the ids response count when cross-page is active.
   // For the banner trigger, we assume total matching + unassigned can exceed page size.
@@ -244,13 +263,26 @@ export default function StoreOrders() {
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setShowAssignModal(true)}
-          disabled={selected.size === 0}
-          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-500 text-white hover:bg-teal-600 transition-colors disabled:bg-teal-500/10 disabled:text-teal-400/60 disabled:cursor-not-allowed"
-        >
-          <Truck size={14} /> Asignar {selected.size > 0 ? `${selected.size} pedido${selected.size !== 1 ? 's' : ''}` : 'a logistica'}
-        </button>
+        <div className="flex items-center gap-2">
+          {selected.size > 0 && !allVisibleSelectedAreML && (
+            <button
+              onClick={handlePrintLabels}
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-navy-800 text-gray-200 hover:bg-navy-700 border border-navy-700 transition-colors"
+              title={allAcrossPages
+                ? `Imprimir etiquetas de los seleccionados (se excluiran los de ML)`
+                : `Imprimir ${nonMLSelectedVisible.length} etiqueta${nonMLSelectedVisible.length !== 1 ? 's' : ''}${nonMLSelectedVisible.length < selected.size ? ' (se omiten los de ML)' : ''}`}
+            >
+              <Printer size={14} /> Imprimir etiquetas
+            </button>
+          )}
+          <button
+            onClick={() => setShowAssignModal(true)}
+            disabled={selected.size === 0}
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-500 text-white hover:bg-teal-600 transition-colors disabled:bg-teal-500/10 disabled:text-teal-400/60 disabled:cursor-not-allowed"
+          >
+            <Truck size={14} /> Asignar {selected.size > 0 ? `${selected.size} pedido${selected.size !== 1 ? 's' : ''}` : 'a logistica'}
+          </button>
+        </div>
       </div>
 
       {/* Platform filter chips */}

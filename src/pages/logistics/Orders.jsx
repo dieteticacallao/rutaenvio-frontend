@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP, useAuth } from '../../lib/store'
-import { Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Link2, ChevronDown, Cloud, ShoppingBag, ShoppingCart } from 'lucide-react'
+import { Plus, Download, Search, X, MapPin, RefreshCw, Trash2, Pencil, Eye, Loader2, FileSpreadsheet, Link2, ChevronDown, Cloud, ShoppingBag, ShoppingCart, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
 import OrderModal from '../../components/shared/OrderModal'
 import ExcelImportModal from '../../components/shared/ExcelImportModal'
@@ -30,6 +30,7 @@ export default function Orders() {
   const [mlConnected, setMlConnected] = useState(false)
   const [importDropdown, setImportDropdown] = useState(false)
   const [syncingML, setSyncingML] = useState(false)
+  const [selected, setSelected] = useState(new Set())
   const importDropdownRef = useRef(null)
 
   // Close dropdown on outside click
@@ -87,6 +88,7 @@ export default function Orders() {
       const list = Array.isArray(d) ? d : Array.isArray(d?.orders) ? d.orders : []
       setOrders(list)
       setTotal(d?.total ?? list.length)
+      setSelected(new Set())
       setLoading(false)
     }).catch(() => { setOrders([]); setLoading(false) })
   }, [filter])
@@ -147,6 +149,31 @@ export default function Orders() {
     }
   }
 
+  // Selection helpers
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handlePrintLabels = () => {
+    if (selected.size === 0) return
+    const selectedList = (Array.isArray(orders) ? orders : []).filter(o => selected.has(o.id))
+    const nonML = selectedList.filter(o => o.source !== 'MERCADOLIBRE')
+    if (nonML.length === 0) {
+      toast('Los pedidos de MercadoLibre no requieren etiqueta', { icon: 'ℹ️' })
+      return
+    }
+    const ids = nonML.map(o => o.id)
+    const token = localStorage.getItem('token')
+    const base = api.defaults.baseURL
+    const url = `${base}/orders/labels?ids=${ids.join(',')}&token=${encodeURIComponent(token || '')}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
   // Client-side filtering
   const safeOrders = Array.isArray(orders) ? orders : []
   const filteredOrders = safeOrders.filter(order => {
@@ -169,6 +196,15 @@ export default function Orders() {
     }
     return true
   })
+
+  const allSelected = filteredOrders.length > 0 && filteredOrders.every(o => selected.has(o.id))
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set())
+    else setSelected(new Set(filteredOrders.map(o => o.id)))
+  }
+  const selectedVisible = filteredOrders.filter(o => selected.has(o.id))
+  const nonMLSelectedCount = selectedVisible.filter(o => o.source !== 'MERCADOLIBRE').length
+  const allSelectedAreML = selectedVisible.length > 0 && nonMLSelectedCount === 0
 
   return (
     <div className="space-y-5">
@@ -442,12 +478,50 @@ export default function Orders() {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-navy-800/60 border border-navy-700">
+          <span className="text-sm text-gray-300">
+            <strong className="text-white">{selected.size}</strong> pedido{selected.size !== 1 ? 's' : ''} seleccionado{selected.size !== 1 ? 's' : ''}
+            {nonMLSelectedCount < selected.size && nonMLSelectedCount > 0 && (
+              <span className="text-xs text-gray-500 ml-2">({selected.size - nonMLSelectedCount} de ML sin etiqueta)</span>
+            )}
+          </span>
+          <div className="flex items-center gap-2">
+            {!allSelectedAreML && (
+              <button
+                onClick={handlePrintLabels}
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors"
+              >
+                <Printer size={14} /> Imprimir {nonMLSelectedCount} etiqueta{nonMLSelectedCount !== 1 ? 's' : ''}
+              </button>
+            )}
+            <button
+              onClick={() => setSelected(new Set())}
+              className="text-xs text-gray-400 hover:text-white underline"
+            >
+              Limpiar seleccion
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-navy-800 text-xs text-gray-500 uppercase tracking-wider">
-              <th className="text-left p-3 pl-4">Pedido</th>
+              <th className="p-3 pl-4 w-8">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  disabled={filteredOrders.length === 0}
+                  className="rounded border-navy-700 bg-navy-900 text-brand-500"
+                  aria-label="Seleccionar todos los pedidos de la pagina"
+                />
+              </th>
+              <th className="text-left p-3">Pedido</th>
               {isLogistics && <th className="text-left p-3">Tienda</th>}
               <th className="text-left p-3">Cliente</th>
               <th className="text-left p-3">Usuario ML</th>
@@ -460,9 +534,9 @@ export default function Orders() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={isLogistics ? 9 : 8} className="p-8 text-center text-gray-500"><Loader2 size={24} className="animate-spin inline-block mr-2" />Cargando pedidos...</td></tr>
+              <tr><td colSpan={isLogistics ? 10 : 9} className="p-8 text-center text-gray-500"><Loader2 size={24} className="animate-spin inline-block mr-2" />Cargando pedidos...</td></tr>
             ) : filteredOrders.length === 0 ? (
-              <tr><td colSpan={isLogistics ? 9 : 8} className="p-8 text-center text-gray-500">{orders.length === 0 ? (isLogistics ? 'Tus clientes aún no asignaron pedidos a tu logística' : 'No hay pedidos. Importa de Tiendanube o crea uno manual.') : 'No se encontraron pedidos con esos filtros.'}</td></tr>
+              <tr><td colSpan={isLogistics ? 10 : 9} className="p-8 text-center text-gray-500">{orders.length === 0 ? (isLogistics ? 'Tus clientes aún no asignaron pedidos a tu logística' : 'No hay pedidos. Importa de Tiendanube o crea uno manual.') : 'No se encontraron pedidos con esos filtros.'}</td></tr>
             ) : filteredOrders.map(order => {
               const mlMatch = order.source === 'MERCADOLIBRE' && order.customerName?.match(/^(.+?)\s*\(([^)]+)\)\s*$/)
               const displayName = mlMatch ? mlMatch[1] : order.customerName
@@ -470,6 +544,15 @@ export default function Orders() {
               return (
               <tr key={order.id} className="table-row">
                 <td className="p-3 pl-4">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(order.id)}
+                    onChange={() => toggleSelect(order.id)}
+                    className="rounded border-navy-700 bg-navy-900 text-brand-500"
+                    aria-label={`Seleccionar pedido ${order.orderNumber || order.id}`}
+                  />
+                </td>
+                <td className="p-3">
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium text-white">{order.orderNumber}</span>
                     {order.source === 'TIENDANUBE' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/20">TN</span>}
