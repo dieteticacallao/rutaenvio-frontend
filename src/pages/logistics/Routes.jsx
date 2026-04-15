@@ -277,7 +277,20 @@ export default function RoutesHistory() {
                       {order.orderNumber && (
                         <div className="text-[10px] text-gray-600 font-mono">#{order.orderNumber}</div>
                       )}
+                      {order.isRescheduled && order.rescheduledReason && (
+                        <div className="text-[10px] text-amber-400/70 italic mt-0.5 truncate">
+                          Motivo: {order.rescheduledReason}
+                        </div>
+                      )}
                     </div>
+                    {order.isRescheduled && (
+                      <span
+                        className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 font-medium whitespace-nowrap"
+                        title={order.rescheduledReason || 'Pedido reprogramado'}
+                      >
+                        Reprogramado
+                      </span>
+                    )}
                     <span className={`text-xs px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
                     <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                       {trackingLink && (

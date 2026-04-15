@@ -472,7 +472,17 @@ export default function RouteDistribution() {
                         onChange={() => toggleOrder(order.id)}
                         className="rounded border-navy-800 bg-navy-950 text-brand-500 focus:ring-brand-500" />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-white truncate">{order.customerName}</div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-sm text-white truncate">{order.customerName}</div>
+                          {order.isRescheduled && (
+                            <span
+                              className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex-shrink-0"
+                              title={order.rescheduledReason ? `Motivo: ${order.rescheduledReason}` : 'Segundo intento de entrega'}
+                            >
+                              Reprogramado
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-gray-500 truncate">{order.address}</div>
                         {suggested && (
                           <div className="flex items-center gap-1 mt-0.5" title="Basado en zona de cobertura">

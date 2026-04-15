@@ -43,6 +43,11 @@ export default function RouteView() {
   const [photo, setPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [rescheduleModal, setRescheduleModal] = useState(null)
+  const [rescheduleReason, setRescheduleReason] = useState('')
+  const [reschedulePhoto, setReschedulePhoto] = useState(null)
+  const [reschedulePhotoPreview, setReschedulePhotoPreview] = useState(null)
+  const [submittingReschedule, setSubmittingReschedule] = useState(false)
   const [updatingOrder, setUpdatingOrder] = useState(null)
   const [startingRoute, setStartingRoute] = useState(false)
   const [pickingUp, setPickingUp] = useState(null)
@@ -442,29 +447,53 @@ export default function RouteView() {
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(parts.join(', '))}`, '_blank')
   }
 
-  const rescheduleOrder = async (order) => {
-    if (!window.confirm(`Reprogramar pedido de ${order.customerName}? Se intentara entregar manana.`)) return
-    setUpdatingOrder(order.id)
+  const openRescheduleModal = (order) => {
+    setRescheduleModal(order)
+    setRescheduleReason('')
+    setReschedulePhoto(null)
+    setReschedulePhotoPreview(null)
+  }
+
+  const handleReschedulePhoto = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setReschedulePhoto(file)
+    const reader = new FileReader()
+    reader.onload = (ev) => setReschedulePhotoPreview(ev.target.result)
+    reader.readAsDataURL(file)
+  }
+
+  const confirmReschedule = async () => {
+    if (!rescheduleModal) return
+    if (!rescheduleReason.trim()) return
+    const order = rescheduleModal
+    setSubmittingReschedule(true)
     try {
       const r = await fetch(`${API}/driver-web/${token}/order/${order.id}/reschedule`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: rescheduleReason.trim(),
+          photo: reschedulePhotoPreview || null
+        })
       })
       const data = await r.json()
       if (data.success) {
         setRoute(prev => {
           const updated = {
             ...prev,
-            orders: prev.orders.map(o => o.id === order.id ? { ...o, status: 'RESCHEDULED' } : o)
+            orders: prev.orders.map(o => o.id === order.id ? { ...o, status: 'RESCHEDULED', isRescheduled: true, rescheduledReason: rescheduleReason.trim() } : o)
           }
           const nextIdx = updated.orders.findIndex((o, i) => i > activeIdx && !DONE_STATUSES.includes(o.status))
           if (nextIdx >= 0) setTimeout(() => setActiveIdx(nextIdx), 300)
           return updated
         })
+        setRescheduleModal(null)
       }
     } catch (err) {
       console.error('Error reprogramando pedido:', err)
     } finally {
-      setUpdatingOrder(null)
+      setSubmittingReschedule(false)
     }
   }
 
@@ -741,7 +770,7 @@ export default function RouteView() {
               )}
             </div>
             <button
-              onClick={() => rescheduleOrder(order)}
+              onClick={() => openRescheduleModal(order)}
               disabled={isUpdating}
               className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors text-xs font-medium border border-amber-500/20 disabled:opacity-50"
             >
@@ -1019,6 +1048,62 @@ export default function RouteView() {
             <button onClick={confirmDelivery} disabled={submitting || !receiverName.trim() || !receiverDni.trim()} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50">
               {submitting ? (<><Loader2 size={16} className="animate-spin" /> Confirmando...</>) : (<><CheckCircle2 size={16} /> Confirmar entrega</>)}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Modal */}
+      {rescheduleModal && (
+        <div className="fixed inset-0 bg-black/70 z-[9999] flex items-end sm:items-center justify-center" onClick={() => !submittingReschedule && setRescheduleModal(null)}>
+          <div className="bg-navy-900 w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-navy-800 p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <CalendarClock size={18} className="text-amber-400" /> Reprogramar pedido
+              </h2>
+              <button onClick={() => !submittingReschedule && setRescheduleModal(null)} className="text-gray-500 hover:text-white"><X size={20} /></button>
+            </div>
+            <p className="text-xs text-gray-400 mb-4">Pedido #{rescheduleModal.routePosition} - {rescheduleModal.customerName}</p>
+
+            <label className="block text-xs text-gray-400 mb-1">Motivo de reprogramacion *</label>
+            <textarea
+              value={rescheduleReason}
+              onChange={e => setRescheduleReason(e.target.value)}
+              placeholder="Ej: No habia nadie en el domicilio"
+              rows={3}
+              className="w-full bg-navy-950 border border-navy-800 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500 mb-4 resize-none"
+            />
+
+            <label className="block text-xs text-gray-400 mb-1">Foto (opcional)</label>
+            {!reschedulePhotoPreview ? (
+              <label className="flex items-center justify-center gap-2 w-full py-8 border-2 border-dashed border-navy-800 rounded-xl text-gray-500 hover:border-amber-500 hover:text-amber-400 transition-colors cursor-pointer mb-4">
+                <Camera size={20} /> <span className="text-sm">Sacar foto</span>
+                <input type="file" accept="image/*" capture="environment" onChange={handleReschedulePhoto} className="hidden" />
+              </label>
+            ) : (
+              <div className="relative mb-4">
+                <img src={reschedulePhotoPreview} alt="Preview" className="w-full h-48 object-cover rounded-xl border border-navy-800" />
+                <button onClick={() => { setReschedulePhoto(null); setReschedulePhotoPreview(null) }} className="absolute top-2 right-2 bg-black/60 rounded-full p-1">
+                  <X size={16} className="text-white" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setRescheduleModal(null)}
+                disabled={submittingReschedule}
+                className="flex-1 py-3 rounded-xl bg-navy-800 text-gray-300 font-semibold text-sm hover:bg-navy-700 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmReschedule}
+                disabled={submittingReschedule || !rescheduleReason.trim()}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-600 text-white font-semibold text-sm hover:bg-amber-700 transition-colors disabled:opacity-50"
+              >
+                {submittingReschedule ? (<><Loader2 size={16} className="animate-spin" /> Enviando...</>) : (<><CalendarClock size={16} /> Confirmar reprogramacion</>)}
+              </button>
+            </div>
           </div>
         </div>
       )}
