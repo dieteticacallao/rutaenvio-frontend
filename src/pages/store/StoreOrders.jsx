@@ -13,8 +13,10 @@ export default function StoreOrders() {
   const [orders, setOrders] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState({ status: '', page: 1 })
+  const [filter, setFilter] = useState({ status: '', source: '', page: 1 })
   const [searchQuery, setSearchQuery] = useState('')
+  const [allAcrossPages, setAllAcrossPages] = useState(false)
+  const [loadingAllIds, setLoadingAllIds] = useState(false)
 
   const [showCreate, setShowCreate] = useState(false)
   const [showExcelModal, setShowExcelModal] = useState(false)
@@ -55,12 +57,17 @@ export default function StoreOrders() {
     } else if (filter.status === 'EN_RUTA') {
       params.status = 'ASSIGNED,PICKED_UP,IN_TRANSIT,ARRIVED'
     }
+    if (filter.source) params.source = filter.source
     api.get('/orders', { params }).then(r => {
       const d = r.data
       const list = Array.isArray(d) ? d : Array.isArray(d?.orders) ? d.orders : []
       setOrders(list)
       setTotal(d?.total ?? list.length)
-      setSelected(new Set())
+      // Preserve selection across pagination when cross-page mode is active; reset otherwise
+      setAllAcrossPages(prevAcross => {
+        if (!prevAcross) setSelected(new Set())
+        return prevAcross
+      })
       setLoading(false)
     }).catch(() => { setOrders([]); setLoading(false) })
   }, [filter])
@@ -125,9 +132,42 @@ export default function StoreOrders() {
   const selectableOrders = filteredOrders.filter(o => !o.logisticId)
   const allSelected = selectableOrders.length > 0 && selectableOrders.every(o => selected.has(o.id))
   const toggleAll = () => {
-    if (allSelected) setSelected(new Set())
-    else setSelected(new Set(selectableOrders.map(o => o.id)))
+    if (allSelected || allAcrossPages) {
+      setSelected(new Set())
+      setAllAcrossPages(false)
+    } else {
+      setSelected(new Set(selectableOrders.map(o => o.id)))
+      setAllAcrossPages(false)
+    }
   }
+
+  const selectAllAcrossPages = async () => {
+    setLoadingAllIds(true)
+    try {
+      const params = {}
+      if (filter.status && filter.status !== 'EN_RUTA') params.status = filter.status
+      else if (filter.status === 'EN_RUTA') params.status = 'ASSIGNED,PICKED_UP,IN_TRANSIT,ARRIVED'
+      if (filter.source) params.source = filter.source
+      params.unassignedOnly = 'true'
+      const { data } = await api.get('/orders/ids', { params })
+      const ids = data?.ids || []
+      setSelected(new Set(ids))
+      setAllAcrossPages(true)
+    } catch {
+      toast.error('Error al seleccionar todos los pedidos')
+    }
+    setLoadingAllIds(false)
+  }
+
+  const clearSelection = () => {
+    setSelected(new Set())
+    setAllAcrossPages(false)
+  }
+
+  // Count of orders selectable across all pages (approximated: backend /orders returns "total" with current status filter).
+  // We already pass unassignedOnly to /ids, so we'll use the ids response count when cross-page is active.
+  // For the banner trigger, we assume total matching + unassigned can exceed page size.
+  const canOfferSelectAllAcross = allSelected && !allAcrossPages && total > filteredOrders.length
 
   return (
     <div className="space-y-5">
@@ -196,7 +236,7 @@ export default function StoreOrders() {
             { value: 'DELIVERED', label: 'Entregados' },
             { value: 'CANCELLED', label: 'Cancelados' },
           ].map(s => (
-            <button key={s.value} onClick={() => setFilter(f => ({ ...f, status: s.value, page: 1 }))}
+            <button key={s.value} onClick={() => { setSelected(new Set()); setAllAcrossPages(false); setFilter(f => ({ ...f, status: s.value, page: 1 })) }}
               className={`text-xs px-3 py-1.5 rounded-full transition-all duration-200 ${
                 filter.status === s.value ? 'bg-teal-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white'
               }`}>
@@ -211,6 +251,25 @@ export default function StoreOrders() {
         >
           <Truck size={14} /> Asignar {selected.size > 0 ? `${selected.size} pedido${selected.size !== 1 ? 's' : ''}` : 'a logistica'}
         </button>
+      </div>
+
+      {/* Platform filter chips */}
+      <div className="flex gap-1.5 flex-wrap items-center">
+        <span className="text-[11px] text-gray-500 uppercase tracking-wider mr-1">Plataforma:</span>
+        {[
+          { value: '', label: 'Todos', cls: filter.source === '' ? 'bg-teal-500 text-white' : 'bg-navy-800 text-gray-400 hover:text-white' },
+          { value: 'TIENDANUBE', label: 'Tiendanube', cls: filter.source === 'TIENDANUBE' ? 'bg-purple-500 text-white border border-purple-400' : 'bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20' },
+          { value: 'MERCADOLIBRE', label: 'MercadoLibre', cls: filter.source === 'MERCADOLIBRE' ? 'text-black border border-yellow-300' : 'border border-yellow-400/40 text-yellow-300 hover:text-black hover:bg-yellow-400/40', style: filter.source === 'MERCADOLIBRE' ? { backgroundColor: '#FFE600' } : {} },
+          { value: 'EXCEL', label: 'Excel', cls: filter.source === 'EXCEL' ? 'bg-emerald-500 text-white border border-emerald-400' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20' },
+          { value: 'MANUAL', label: 'Manual', cls: filter.source === 'MANUAL' ? 'bg-gray-500 text-white border border-gray-400' : 'bg-gray-500/10 text-gray-300 border border-gray-500/20 hover:bg-gray-500/20' },
+        ].map(s => (
+          <button key={s.value || 'all'}
+            onClick={() => { setSelected(new Set()); setAllAcrossPages(false); setFilter(f => ({ ...f, source: s.value, page: 1 })) }}
+            style={s.style}
+            className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all duration-200 ${s.cls}`}>
+            {s.label}
+          </button>
+        ))}
       </div>
 
       {/* Search */}
@@ -231,6 +290,39 @@ export default function StoreOrders() {
           )}
         </div>
       </div>
+
+      {/* Cross-page selection banner */}
+      {(canOfferSelectAllAcross || allAcrossPages) && (
+        <div className={`rounded-lg border px-4 py-2.5 text-sm flex items-center justify-between flex-wrap gap-2 ${
+          allAcrossPages ? 'bg-teal-500/10 border-teal-500/30 text-teal-300' : 'bg-navy-800/60 border-navy-700 text-gray-300'
+        }`}>
+          {allAcrossPages ? (
+            <>
+              <span>
+                Seleccionados <strong className="text-white">{selected.size}</strong> pedidos en total (todas las paginas).
+              </span>
+              <button onClick={clearSelection} className="text-xs font-semibold text-teal-300 hover:text-teal-200 underline">
+                Limpiar seleccion
+              </button>
+            </>
+          ) : (
+            <>
+              <span>
+                Seleccionados <strong className="text-white">{selected.size}</strong> pedidos de esta pagina.
+                {' '}¿Seleccionar los <strong className="text-white">{total}</strong> pedidos totales?
+              </span>
+              <button
+                onClick={selectAllAcrossPages}
+                disabled={loadingAllIds}
+                className="text-xs font-semibold text-teal-400 hover:text-teal-300 underline disabled:opacity-50 disabled:cursor-wait inline-flex items-center gap-1"
+              >
+                {loadingAllIds && <Loader2 size={12} className="animate-spin" />}
+                Seleccionar los {total} pedidos
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       <div className="card overflow-hidden">
@@ -340,10 +432,12 @@ export default function StoreOrders() {
       {showMLModal && <MLImportModal onClose={() => setShowMLModal(false)} onImported={loadOrders} />}
       {showAssignModal && (
         <AssignLogisticsModal
-          orders={safeOrders.filter(o => selected.has(o.id))}
+          orderIds={Array.from(selected)}
+          previewOrders={safeOrders.filter(o => selected.has(o.id))}
           onClose={() => setShowAssignModal(false)}
           onAssigned={() => {
             setSelected(new Set())
+            setAllAcrossPages(false)
             setShowAssignModal(false)
             loadOrders()
           }}
@@ -353,7 +447,7 @@ export default function StoreOrders() {
   )
 }
 
-function AssignLogisticsModal({ orders, onClose, onAssigned }) {
+function AssignLogisticsModal({ orderIds, previewOrders, onClose, onAssigned }) {
   const [logistics, setLogistics] = useState([])
   const [loadingLogistics, setLoadingLogistics] = useState(true)
   const [logisticId, setLogisticId] = useState('')
@@ -375,7 +469,6 @@ function AssignLogisticsModal({ orders, onClose, onAssigned }) {
     }
     setAssigning(true)
     try {
-      const orderIds = orders.map(o => o.id)
       const { data } = await api.post('/orders/assign-logistics', { orderIds, logisticId })
       const count = data?.data?.assigned ?? orderIds.length
       const logisticName = data?.data?.logistic?.name || logistics.find(l => l.id === logisticId)?.name || 'logística'
@@ -418,11 +511,16 @@ function AssignLogisticsModal({ orders, onClose, onAssigned }) {
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto border border-navy-800 rounded-lg">
-          <div className="px-3 py-2 text-xs text-gray-500 uppercase tracking-wider bg-navy-900 sticky top-0 border-b border-navy-800">
-            {orders.length} pedido{orders.length !== 1 ? 's' : ''} a asignar
+          <div className="px-3 py-2 text-xs text-gray-500 uppercase tracking-wider bg-navy-900 sticky top-0 border-b border-navy-800 flex items-center justify-between">
+            <span>{orderIds.length} pedido{orderIds.length !== 1 ? 's' : ''} a asignar</span>
+            {previewOrders.length < orderIds.length && (
+              <span className="text-[10px] normal-case tracking-normal text-gray-600">
+                mostrando {previewOrders.length} de {orderIds.length} — el resto viene de otras paginas
+              </span>
+            )}
           </div>
           <div className="divide-y divide-navy-800/50">
-            {orders.map(o => (
+            {previewOrders.map(o => (
               <div key={o.id} className="px-3 py-2 text-sm">
                 <div className="text-gray-200 font-medium">{o.customerName}</div>
                 <div className="text-xs text-gray-500 truncate">{o.address}</div>
