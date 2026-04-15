@@ -7,6 +7,18 @@ import { io as socketIO } from 'socket.io-client'
 const API = import.meta.env.VITE_API_URL || '/api'
 const SOCKET_URL = API.replace(/\/api\/?$/, '') || window.location.origin
 
+// Safari iOS no soporta getUserMedia en webviews/SPAs montadas como la nuestra
+// de forma consistente. Detectamos y mostramos un aviso para abrir en Chrome.
+const UA = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+const IS_SAFARI = /^((?!chrome|android|crios|fxios).)*safari/i.test(UA)
+const IS_IOS = /iPad|iPhone|iPod/.test(UA)
+const IS_SAFARI_IOS = IS_SAFARI && IS_IOS
+
+const openInChrome = () => {
+  const current = window.location.href
+  window.location.href = 'googlechrome://' + current.replace(/^https?:\/\//, '')
+}
+
 const STATUS_CONFIG = {
   PENDING: { label: 'Pendiente', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
   ASSIGNED: { label: 'Asignado', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
@@ -299,6 +311,7 @@ export default function RouteView() {
   // Start html5-qrcode when scan modal opens
   useEffect(() => {
     if (!scanModalOrder) return
+    if (IS_SAFARI_IOS) return // no init en Safari iOS, mostramos fallback UI
     const elementId = 'qr-reader'
     isProcessingQrRef.current = false
     const timer = setTimeout(() => {
@@ -409,6 +422,7 @@ export default function RouteView() {
 
   useEffect(() => {
     if (!globalScanOpen) return
+    if (IS_SAFARI_IOS) return // no init en Safari iOS, mostramos fallback UI
     const elementId = 'qr-reader-global'
     isProcessingQrRef.current = false
     const timer = setTimeout(() => {
@@ -1193,16 +1207,37 @@ export default function RouteView() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center">
-              <div id="qr-reader-global" className="rounded-lg overflow-hidden bg-black" style={{ minHeight: '260px', minWidth: '260px' }} />
-              <p className="text-gray-500 mt-3 text-center" style={{ fontSize: '12px' }}>
-                Apunta la camara al QR del paquete. Se confirmara el retiro automaticamente.
-              </p>
+              {IS_SAFARI_IOS ? (
+                <div className="w-full text-center py-4">
+                  <Camera size={40} className="mx-auto text-amber-400 mb-3" />
+                  <p className="text-white text-sm font-semibold mb-2">Safari no soporta esta funcion</p>
+                  <p className="text-gray-400 text-sm leading-relaxed">
+                    Para escanear QR usa Chrome en tu celular. Safari no soporta el acceso a la camara en esta app.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div id="qr-reader-global" className="rounded-lg overflow-hidden bg-black" style={{ minHeight: '260px', minWidth: '260px' }} />
+                  <p className="text-gray-500 mt-3 text-center" style={{ fontSize: '12px' }}>
+                    Apunta la camara al QR del paquete. Se confirmara el retiro automaticamente.
+                  </p>
+                </>
+              )}
             </div>
 
             <div
-              className="border-t border-navy-800/50 px-4 pt-3 bg-navy-900 flex-shrink-0"
+              className="border-t border-navy-800/50 px-4 pt-3 bg-navy-900 flex-shrink-0 space-y-2"
               style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
             >
+              {IS_SAFARI_IOS && (
+                <button
+                  onClick={openInChrome}
+                  style={{ touchAction: 'manipulation' }}
+                  className="w-full flex items-center justify-center gap-1.5 min-h-[48px] rounded-lg bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-600 transition-colors text-sm font-semibold"
+                >
+                  Abrir en Chrome
+                </button>
+              )}
               <button
                 onClick={closeGlobalScanner}
                 style={{ touchAction: 'manipulation' }}
@@ -1236,14 +1271,35 @@ export default function RouteView() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center">
-              <div id="qr-reader" className="rounded-lg overflow-hidden bg-black" style={{ minHeight: '260px', minWidth: '260px' }} />
-              <p className="text-gray-500 mt-3 text-center" style={{ fontSize: '12px' }}>Apunta la camara al codigo QR del paquete</p>
+              {IS_SAFARI_IOS ? (
+                <div className="w-full text-center py-4">
+                  <Camera size={40} className="mx-auto text-amber-400 mb-3" />
+                  <p className="text-white text-sm font-semibold mb-2">Safari no soporta esta funcion</p>
+                  <p className="text-gray-400 text-sm leading-relaxed">
+                    Para escanear QR usa Chrome en tu celular. Safari no soporta el acceso a la camara en esta app.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div id="qr-reader" className="rounded-lg overflow-hidden bg-black" style={{ minHeight: '260px', minWidth: '260px' }} />
+                  <p className="text-gray-500 mt-3 text-center" style={{ fontSize: '12px' }}>Apunta la camara al codigo QR del paquete</p>
+                </>
+              )}
             </div>
 
             <div
-              className="border-t border-navy-800/50 px-4 pt-3 bg-navy-900 flex-shrink-0"
+              className="border-t border-navy-800/50 px-4 pt-3 bg-navy-900 flex-shrink-0 space-y-2"
               style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
             >
+              {IS_SAFARI_IOS && (
+                <button
+                  onClick={openInChrome}
+                  style={{ touchAction: 'manipulation' }}
+                  className="w-full flex items-center justify-center gap-1.5 min-h-[48px] rounded-lg bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-600 transition-colors text-sm font-semibold"
+                >
+                  Abrir en Chrome
+                </button>
+              )}
               <button
                 onClick={() => { stopScanner(); confirmPickup(scanModalOrder.id) }}
                 style={{ touchAction: 'manipulation' }}
