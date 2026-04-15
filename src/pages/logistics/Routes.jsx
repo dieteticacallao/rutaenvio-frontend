@@ -230,12 +230,6 @@ export default function RoutesHistory() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => window.open(`${api.defaults.baseURL}/routes/${selectedRoute.id}/labels`, '_blank')}
-              className="btn-secondary text-xs"
-            >
-              <Printer size={14} /> Imprimir etiquetas
-            </button>
             {computeRouteStatus(selectedRoute) === 'IN_PROGRESS' && (
               <button
                 onClick={() => finishRoute(selectedRoute)}
