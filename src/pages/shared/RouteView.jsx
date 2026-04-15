@@ -55,6 +55,7 @@ export default function RouteView() {
   const [globalScanOpen, setGlobalScanOpen] = useState(false)
   const [flashMessage, setFlashMessage] = useState(null) // { text, type: 'success'|'error' }
   const globalScannerRef = useRef(null)
+  const isProcessingQrRef = useRef(false)
   const [routeEstimate, setRouteEstimate] = useState(null)
   const [activeIdx, setActiveIdx] = useState(0)
   const [showAllOrders, setShowAllOrders] = useState(false)
@@ -286,10 +287,11 @@ export default function RouteView() {
   }
 
   const stopScanner = () => {
+    isProcessingQrRef.current = true
     if (scannerRef.current) {
-      scannerRef.current.stop().catch(() => {})
-      scannerRef.current.clear()
+      const s = scannerRef.current
       scannerRef.current = null
+      s.stop().then(() => { try { s.clear() } catch {} }).catch(() => {})
     }
     setScanModalOrder(null)
   }
@@ -298,12 +300,10 @@ export default function RouteView() {
   useEffect(() => {
     if (!scanModalOrder) return
     const elementId = 'qr-reader'
-    // 300ms: dar tiempo a que el modal termine de montar en DOM en mobile lento
+    isProcessingQrRef.current = false
     const timer = setTimeout(() => {
       const container = document.getElementById(elementId)
       if (!container) return
-      // Forzar dimensiones en pixeles explicitas (html5-qrcode necesita width/height
-      // concretos al iniciar, no porcentajes)
       const w = Math.min(window.innerWidth - 48, 360)
       container.style.width = w + 'px'
       container.style.height = w + 'px'
@@ -320,46 +320,52 @@ export default function RouteView() {
           },
           aspectRatio: 1.0
         },
-        (decodedText) => {
-          let orderId = null
-          try {
-            const parsed = JSON.parse(decodedText)
-            orderId = parsed.orderId || parsed.id
-          } catch {
-            const found = route?.orders?.find(o => String(o.id) === decodedText)
-            if (found) orderId = found.id
-          }
-          scanner.stop().catch(() => {})
-          scanner.clear()
+        async (decodedText) => {
+          console.log('[QR] Detectado:', decodedText)
+          if (isProcessingQrRef.current) return
+          isProcessingQrRef.current = true
+
+          const payload = extractScanPayload(decodedText)
+          console.log('[Route] QR recibido (per-order):', payload)
+
+          // Match por trackingCode o id en la ruta completa
+          const order = route?.orders?.find(o =>
+            (payload.tracking && o.trackingCode === payload.tracking) ||
+            (payload.id && o.id === payload.id)
+          )
+
+          try { await scanner.stop() } catch {}
+          try { scanner.clear() } catch {}
           scannerRef.current = null
           setScanModalOrder(null)
-          if (orderId) {
-            confirmPickup(orderId)
-          }
+          if (order) confirmPickup(order.id)
         },
         () => {}
-      ).catch(() => {
-        scanner.clear()
+      ).catch((err) => {
+        console.error('[QR] Error iniciando scanner per-order:', err)
+        try { scanner.clear() } catch {}
         scannerRef.current = null
         setScanModalOrder(null)
       })
     }, 300)
     return () => {
       clearTimeout(timer)
+      isProcessingQrRef.current = false
       if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {})
-        scannerRef.current.clear()
+        const s = scannerRef.current
         scannerRef.current = null
+        s.stop().then(() => { try { s.clear() } catch {} }).catch(() => {})
       }
     }
   }, [scanModalOrder?.id])
 
   // Global QR scanner: matches any order in the route by trackingCode or id
   const closeGlobalScanner = () => {
+    isProcessingQrRef.current = true // bloquea callbacks tardios
     if (globalScannerRef.current) {
-      globalScannerRef.current.stop().catch(() => {})
-      globalScannerRef.current.clear()
+      const s = globalScannerRef.current
       globalScannerRef.current = null
+      s.stop().then(() => { try { s.clear() } catch {} }).catch(() => {})
     }
     setGlobalScanOpen(false)
   }
@@ -369,9 +375,38 @@ export default function RouteView() {
     setTimeout(() => setFlashMessage(null), 3500)
   }
 
+  // Extract a tracking code from raw QR text.
+  // Accepts: JSON { trackingCode | tracking | orderId | id }, URLs like
+  // https://rutaenvio-frontend.vercel.app/track/ABC123, or a plain code.
+  const extractScanPayload = (decodedText) => {
+    const raw = (decodedText || '').trim()
+    if (!raw) return { tracking: null, id: null, raw: '' }
+    // 1) JSON
+    try {
+      const p = JSON.parse(raw)
+      return {
+        tracking: p.trackingCode || p.tracking || null,
+        id: p.orderId || p.id || null,
+        raw
+      }
+    } catch {}
+    // 2) URL - take last non-empty path segment
+    if (/^https?:\/\//i.test(raw)) {
+      try {
+        const u = new URL(raw)
+        const segs = u.pathname.split('/').filter(Boolean)
+        const last = segs[segs.length - 1] || null
+        return { tracking: last, id: null, raw }
+      } catch {}
+    }
+    // 3) plain string - could be trackingCode or order id
+    return { tracking: raw, id: raw, raw }
+  }
+
   useEffect(() => {
     if (!globalScanOpen) return
     const elementId = 'qr-reader-global'
+    isProcessingQrRef.current = false
     const timer = setTimeout(() => {
       const container = document.getElementById(elementId)
       if (!container) return
@@ -391,38 +426,41 @@ export default function RouteView() {
           },
           aspectRatio: 1.0
         },
-        (decodedText) => {
-          // Try JSON { trackingCode, id, orderId } or raw trackingCode / id
-          let parsedTracking = null
-          let parsedId = null
-          try {
-            const p = JSON.parse(decodedText)
-            parsedTracking = p.trackingCode || p.tracking || null
-            parsedId = p.orderId || p.id || null
-          } catch {
-            // not JSON, fallthrough to raw match
-          }
-          const raw = decodedText.trim()
+        async (decodedText) => {
+          console.log('[QR] Detectado:', decodedText)
+          // Guard: procesar un solo scan. El callback puede dispararse varias
+          // veces en el mismo frame antes de que stop() resuelva.
+          if (isProcessingQrRef.current) return
+          isProcessingQrRef.current = true
+
+          const payload = extractScanPayload(decodedText)
+          console.log('[Route] QR recibido:', payload)
+
+          // Buscar pedido por trackingCode primero, luego por id como fallback
           const order = route?.orders?.find(o =>
-            (parsedTracking && o.trackingCode === parsedTracking) ||
-            (parsedId && o.id === parsedId) ||
-            o.trackingCode === raw ||
-            o.id === raw
+            (payload.tracking && o.trackingCode === payload.tracking) ||
+            (payload.id && o.id === payload.id)
           )
-          scanner.stop().catch(() => {})
-          scanner.clear()
+
+          // Detener scanner ANTES de seguir: esperamos a que stop() resuelva
+          // para garantizar que el stream se cierra y la camara se libera.
+          try { await scanner.stop() } catch {}
+          try { scanner.clear() } catch {}
           globalScannerRef.current = null
           setGlobalScanOpen(false)
+
           if (order) {
             showFlash(`\u2713 Pedido #${order.routePosition || ''} de ${order.customerName} - retiro confirmado`, 'success')
             confirmPickup(order.id)
           } else {
+            console.warn('[Route] QR sin match en la ruta actual:', payload.raw)
             showFlash('QR no corresponde a ningun pedido de esta ruta', 'error')
           }
         },
         () => {}
-      ).catch(() => {
-        scanner.clear()
+      ).catch((err) => {
+        console.error('[QR] Error iniciando scanner:', err)
+        try { scanner.clear() } catch {}
         globalScannerRef.current = null
         setGlobalScanOpen(false)
         showFlash('No se pudo abrir la camara. Revisa los permisos.', 'error')
@@ -430,10 +468,11 @@ export default function RouteView() {
     }, 300)
     return () => {
       clearTimeout(timer)
+      isProcessingQrRef.current = false
       if (globalScannerRef.current) {
-        globalScannerRef.current.stop().catch(() => {})
-        globalScannerRef.current.clear()
+        const s = globalScannerRef.current
         globalScannerRef.current = null
+        s.stop().then(() => { try { s.clear() } catch {} }).catch(() => {})
       }
     }
   }, [globalScanOpen])
