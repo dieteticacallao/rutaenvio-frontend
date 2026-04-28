@@ -46,6 +46,14 @@ export default function OrderModal({ order, clients, onClose, onSaved }) {
       toast.error('El codigo postal es obligatorio')
       return
     }
+    if (!form.city.trim()) {
+      toast.error('La ciudad es obligatoria')
+      return
+    }
+    if (!form.province.trim()) {
+      toast.error('La provincia es obligatoria')
+      return
+    }
     setSaving(true)
     try {
       if (isEdit) {
@@ -93,12 +101,12 @@ export default function OrderModal({ order, clients, onClose, onSaved }) {
         <div><label className="label">Direccion *</label><input className="input" placeholder="Av. Corrientes 1234" value={form.address} onChange={set('address')} required /></div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="label">Depto/piso</label><input className="input" placeholder="3ro B" value={form.addressDetail} onChange={set('addressDetail')} /></div>
-          <div><label className="label">Ciudad</label><input className="input" value={form.city} onChange={set('city')} /></div>
+          <div><label className="label">Ciudad *</label><input className="input" value={form.city} onChange={set('city')} required /></div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="label">Provincia</label>
-            <select className="input" value={form.province} onChange={set('province')}>
+            <label className="label">Provincia *</label>
+            <select className="input" value={form.province} onChange={set('province')} required>
               {['Buenos Aires','CABA','Catamarca','Chaco','Chubut','Cordoba','Corrientes','Entre Rios','Formosa','Jujuy','La Pampa','La Rioja','Mendoza','Misiones','Neuquen','Rio Negro','Salta','San Juan','San Luis','Santa Cruz','Santa Fe','Santiago del Estero','Tierra del Fuego','Tucuman'].map(p => (
                 <option key={p} value={p}>{p}</option>
               ))}
