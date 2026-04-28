@@ -226,6 +226,14 @@ function ZoneModal({ zone, onClose, onSaved }) {
   )
 }
 
+// TODO (mejoras de UX para zonas, no implementar ahora):
+//  - Banner si hay orders.zoneId=null para esta logistica ("3 pedidos sin zona,
+//    revisa Configuracion") con link directo aca.
+//  - Boton "Recalcular zonas" que llame a un endpoint que corra detectZone sobre
+//    todos los orders pendientes con zoneId distinto (equivalente a backfill --recompute
+//    pero one-shot via UI).
+//  - Sugerencia automatica de localities: en cada zona mostrar las cities reales
+//    que aparecieron en orders y aun no estan en localities, para agregarlas con un click.
 function ZonesSection() {
   const [zones, setZones] = useState([])
   const [loading, setLoading] = useState(true)
