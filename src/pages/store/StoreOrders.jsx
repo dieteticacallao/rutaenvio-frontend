@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP } from '../../lib/store'
-import { Package, Plus, Download, Search, X, MapPin, Loader2, Truck, Eye, FileSpreadsheet, ChevronDown, Cloud, ShoppingBag, ShoppingCart, Trash2, Printer } from 'lucide-react'
+import { Package, Plus, Download, Search, X, MapPin, Loader2, Truck, Eye, FileSpreadsheet, ChevronDown, Cloud, ShoppingBag, ShoppingCart, Trash2, Printer, FileText, Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import OrderModal from '../../components/shared/OrderModal'
 import ExcelImportModal from '../../components/shared/ExcelImportModal'
@@ -28,7 +28,11 @@ export default function StoreOrders() {
   const importDropdownRef = useRef(null)
 
   const [selected, setSelected] = useState(new Set())
-  const [showAssignModal, setShowAssignModal] = useState(false)
+  const [logistics, setLogistics] = useState([])
+  const [logisticsLoading, setLogisticsLoading] = useState(true)
+  const [pickedLogisticsId, setPickedLogisticsId] = useState('')
+  const [showConfirmReceipt, setShowConfirmReceipt] = useState(false)
+  const [createdReceipt, setCreatedReceipt] = useState(null)
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -47,6 +51,14 @@ export default function StoreOrders() {
     api.get('/mercadolibre/status')
       .then(r => setMlConnected(!!(r.data?.data?.connected ?? r.data?.connected)))
       .catch(() => setMlConnected(false))
+    api.get('/companies/my-logistics')
+      .then(r => {
+        const list = r.data?.data || []
+        setLogistics(list)
+        if (list.length === 1) setPickedLogisticsId(list[0].id)
+        setLogisticsLoading(false)
+      })
+      .catch(() => { setLogistics([]); setLogisticsLoading(false) })
   }, [])
 
   const loadOrders = useCallback(() => {
@@ -111,6 +123,8 @@ export default function StoreOrders() {
   }
 
   const toggleSelect = (id) => {
+    const order = (orders || []).find(o => o.id === id)
+    if (order && order.receiptId) return
     setSelected(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -129,10 +143,8 @@ export default function StoreOrders() {
     return true
   })
 
-  // Todos los pedidos son seleccionables (para poder imprimir etiquetas de pedidos
-  // ya asignados a logistica). El backend de assign-logistics maneja solos los
-  // que todavia no estan asignados.
-  const selectableOrders = filteredOrders
+  // Solo los pedidos sin receipt son seleccionables para generar un nuevo remito.
+  const selectableOrders = filteredOrders.filter(o => !o.receiptId)
   const allSelected = selectableOrders.length > 0 && selectableOrders.every(o => selected.has(o.id))
   const toggleAll = () => {
     if (allSelected || allAcrossPages) {
@@ -151,7 +163,7 @@ export default function StoreOrders() {
       if (filter.status && filter.status !== 'EN_RUTA') params.status = filter.status
       else if (filter.status === 'EN_RUTA') params.status = 'ASSIGNED,PICKED_UP,IN_TRANSIT,ARRIVED'
       if (filter.source) params.source = filter.source
-      params.unassignedOnly = 'true'
+      params.noReceiptOnly = 'true'
       const { data } = await api.get('/orders/ids', { params })
       const ids = data?.ids || []
       setSelected(new Set(ids))
@@ -200,8 +212,66 @@ export default function StoreOrders() {
   // For the banner trigger, we assume total matching + unassigned can exceed page size.
   const canOfferSelectAllAcross = allSelected && !allAcrossPages && total > filteredOrders.length
 
+  const handleOpenConfirmReceipt = () => {
+    if (!pickedLogisticsId) {
+      toast.error('Elegí una logística')
+      return
+    }
+    if (selected.size === 0) return
+    setShowConfirmReceipt(true)
+  }
+
+  const visibleSelectedOrders = safeOrders.filter(o => selected.has(o.id))
+
   return (
     <div className="space-y-5">
+      {/* Sticky receipt bar — solo visible con seleccion */}
+      {selected.size > 0 && (
+        <div className="sticky top-0 z-30 -mx-6 px-6 py-3 bg-teal-600/95 backdrop-blur-sm border-b border-teal-400/40 shadow-lg flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 text-white">
+            <FileText size={16} />
+            <span className="text-sm font-semibold">
+              {selected.size} pedido{selected.size !== 1 ? 's' : ''} seleccionado{selected.size !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="flex-1 min-w-[200px] max-w-xs">
+            {logisticsLoading ? (
+              <div className="text-xs text-teal-50 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Cargando logísticas...</div>
+            ) : logistics.length === 0 ? (
+              <div className="text-xs text-amber-100 bg-amber-500/20 border border-amber-300/40 rounded px-2 py-1.5">
+                No tenés logísticas vinculadas
+              </div>
+            ) : (
+              <select
+                value={pickedLogisticsId}
+                onChange={e => setPickedLogisticsId(e.target.value)}
+                className="w-full text-sm bg-white/10 border border-white/30 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/40"
+              >
+                <option value="" className="text-gray-900">Elegí logística...</option>
+                {logistics.map(l => (
+                  <option key={l.id} value={l.id} className="text-gray-900">
+                    {l.name}{l.isExternal ? ' (externa)' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <button
+            onClick={handleOpenConfirmReceipt}
+            disabled={!pickedLogisticsId || logistics.length === 0}
+            className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-white text-teal-700 font-semibold hover:bg-teal-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileText size={14} /> Asignar y generar remito
+          </button>
+          <button
+            onClick={clearSelection}
+            className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+          >
+            <X size={14} /> Cancelar selección
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-white flex items-center gap-2">
@@ -289,13 +359,6 @@ export default function StoreOrders() {
               <Printer size={14} /> Imprimir etiquetas
             </button>
           )}
-          <button
-            onClick={() => setShowAssignModal(true)}
-            disabled={selected.size === 0}
-            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-500 text-white hover:bg-teal-600 transition-colors disabled:bg-teal-500/10 disabled:text-teal-400/60 disabled:cursor-not-allowed"
-          >
-            <Truck size={14} /> Asignar {selected.size > 0 ? `${selected.size} pedido${selected.size !== 1 ? 's' : ''}` : 'a logistica'}
-          </button>
         </div>
       </div>
 
@@ -399,23 +462,44 @@ export default function StoreOrders() {
             ) : filteredOrders.length === 0 ? (
               <tr><td colSpan={8} className="p-8 text-center text-gray-500">{orders.length === 0 ? 'No hay pedidos. Importá desde Tiendanube, MercadoLibre o Excel.' : 'No se encontraron pedidos con esos filtros.'}</td></tr>
             ) : filteredOrders.map(order => {
+              const inReceipt = !!order.receiptId
+              const receiptNumber = order.receipt?.receiptNumber
+              const handleCopyReceipt = (e) => {
+                e.stopPropagation()
+                if (!receiptNumber) return
+                navigator.clipboard?.writeText(receiptNumber)
+                  .then(() => toast.success(`Remito ${receiptNumber} copiado`))
+                  .catch(() => toast.error('No se pudo copiar'))
+              }
               return (
-                <tr key={order.id} className="table-row">
+                <tr key={order.id} className={`table-row ${inReceipt ? 'opacity-50' : ''}`}>
                   <td className="p-3 pl-4">
                     <input
                       type="checkbox"
                       checked={selected.has(order.id)}
                       onChange={() => toggleSelect(order.id)}
-                      className="rounded border-navy-700 bg-navy-900 text-teal-500"
+                      disabled={inReceipt}
+                      title={inReceipt ? 'Pedido ya incluido en un remito' : ''}
+                      className="rounded border-navy-700 bg-navy-900 text-teal-500 disabled:cursor-not-allowed"
                     />
                   </td>
                   <td className="p-3">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-medium text-white">{order.orderNumber}</span>
                       {order.source === 'TIENDANUBE' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/20">TN</span>}
                       {order.source === 'MERCADOLIBRE' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-yellow-400/40" style={{backgroundColor: '#FFE600', color: '#000'}}>ML</span>}
                       {order.source === 'EXCEL' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">XLS</span>}
                       {order.source === 'MANUAL' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-400 border border-gray-500/20">MAN</span>}
+                      {inReceipt && receiptNumber && (
+                        <button
+                          type="button"
+                          onClick={handleCopyReceipt}
+                          title="Click para copiar el número de remito"
+                          className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-300 border border-gray-500/30 hover:bg-gray-500/30 hover:text-white transition-colors cursor-pointer"
+                        >
+                          <FileText size={9} /> Remito {receiptNumber}
+                        </button>
+                      )}
                     </div>
                   </td>
                   <td className="p-3">
@@ -474,54 +558,103 @@ export default function StoreOrders() {
       {showExcelModal && <ExcelImportModal onClose={() => setShowExcelModal(false)} onImported={loadOrders} />}
       {showTNModal && <TNImportModal onClose={() => setShowTNModal(false)} onImported={loadOrders} />}
       {showMLModal && <MLImportModal onClose={() => setShowMLModal(false)} onImported={loadOrders} />}
-      {showAssignModal && (
-        <AssignLogisticsModal
+      {showConfirmReceipt && (
+        <ConfirmReceiptModal
           orderIds={Array.from(selected)}
-          previewOrders={safeOrders.filter(o => selected.has(o.id))}
-          onClose={() => setShowAssignModal(false)}
-          onAssigned={() => {
+          previewOrders={visibleSelectedOrders}
+          logistics={logistics}
+          logisticsCompanyId={pickedLogisticsId}
+          onClose={() => setShowConfirmReceipt(false)}
+          onCreated={(receipt, printUrl) => {
+            setShowConfirmReceipt(false)
             setSelected(new Set())
             setAllAcrossPages(false)
-            setShowAssignModal(false)
+            setCreatedReceipt({ receipt, printUrl })
             loadOrders()
           }}
+          navigate={navigate}
+        />
+      )}
+      {createdReceipt && (
+        <ReceiptPrintModal
+          receipt={createdReceipt.receipt}
+          printUrl={createdReceipt.printUrl}
+          logistics={logistics}
+          onClose={() => setCreatedReceipt(null)}
         />
       )}
     </div>
   )
 }
 
-function AssignLogisticsModal({ orderIds, previewOrders, onClose, onAssigned }) {
-  const [logistics, setLogistics] = useState([])
-  const [loadingLogistics, setLoadingLogistics] = useState(true)
-  const [logisticId, setLogisticId] = useState('')
-  const [assigning, setAssigning] = useState(false)
+const PLATFORM_LABELS = {
+  TIENDANUBE: 'Tienda Nube',
+  MERCADOLIBRE: 'Mercado Libre',
+  EXCEL: 'Excel',
+  MANUAL: 'Manual',
+}
 
-  useEffect(() => {
-    api.get('/companies/my-logistics').then(r => {
-      const list = r.data?.data || []
-      setLogistics(list)
-      if (list.length === 1) setLogisticId(list[0].id)
-      setLoadingLogistics(false)
-    }).catch(() => { setLogistics([]); setLoadingLogistics(false) })
-  }, [])
+function ConfirmReceiptModal({ orderIds, previewOrders, logistics, logisticsCompanyId, onClose, onCreated, navigate }) {
+  const [observations, setObservations] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const logisticName = logistics.find(l => l.id === logisticsCompanyId)?.name || 'la logística'
+
+  // Conteo por plataforma desde los previewOrders. Si selected esta cross-page,
+  // previewOrders puede tener menos que orderIds totales.
+  const platformCounts = previewOrders.reduce((acc, o) => {
+    const key = o.source || 'MANUAL'
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  }, {})
 
   const handleConfirm = async () => {
-    if (!logisticId) {
-      toast.error('Seleccioná una logística')
-      return
-    }
-    setAssigning(true)
+    setSubmitting(true)
     try {
-      const { data } = await api.post('/orders/assign-logistics', { orderIds, logisticId })
-      const count = data?.data?.assigned ?? orderIds.length
-      const logisticName = data?.data?.logistic?.name || logistics.find(l => l.id === logisticId)?.name || 'logística'
-      toast.success(`${count} pedido${count !== 1 ? 's' : ''} asignado${count !== 1 ? 's' : ''} a ${logisticName}`)
-      onAssigned()
+      const { data } = await api.post('/store/receipts', {
+        orderIds,
+        logisticsCompanyId,
+        observations: observations.trim() || undefined,
+      })
+      const receipt = data?.data?.receipt
+      const backendPrintUrl = `${api.defaults.baseURL}/receipts/${receipt.id}/print`
+      onCreated(receipt, backendPrintUrl)
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Error al asignar')
+      const errData = err.response?.data || {}
+      const msg = errData.error || 'Error al generar el remito'
+
+      if (Array.isArray(errData.conflictingOrderIds) && errData.conflictingOrderIds.length > 0) {
+        const conflictNumbers = previewOrders
+          .filter(o => errData.conflictingOrderIds.includes(o.id))
+          .map(o => o.orderNumber)
+          .filter(Boolean)
+        const detail = conflictNumbers.length > 0
+          ? `Pedidos afectados: ${conflictNumbers.join(', ')}`
+          : `${errData.conflictingOrderIds.length} pedido(s) ya estaban en otro remito`
+        toast.error(`${msg}. ${detail}`, { duration: 6000 })
+      } else if (/datos de facturaci/i.test(msg) || /CUIT|tax/i.test(msg)) {
+        toast.error(
+          (t) => (
+            <span>
+              {msg}.{' '}
+              <button
+                onClick={() => {
+                  toast.dismiss(t.id)
+                  navigate('/tienda/config?section=billing')
+                }}
+                className="underline font-semibold text-teal-300 ml-1"
+              >
+                Ir a Configuración
+              </button>
+            </span>
+          ),
+          { duration: 8000 }
+        )
+      } else {
+        toast.error(msg)
+      }
     }
-    setAssigning(false)
+    setSubmitting(false)
   }
 
   return (
@@ -529,62 +662,138 @@ function AssignLogisticsModal({ orderIds, previewOrders, onClose, onAssigned }) 
       <div onClick={e => e.stopPropagation()} className="card-p w-full max-w-lg space-y-4 max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <Truck size={18} className="text-teal-400" /> Asignar pedidos a logística
+            <FileText size={18} className="text-teal-400" /> Confirmar asignación
+          </h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white" disabled={submitting}><X size={20} /></button>
+        </div>
+
+        <div className="rounded-lg border border-navy-800 bg-navy-900/50 p-3 space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-400">Logística destino</span>
+            <span className="text-white font-semibold inline-flex items-center gap-1.5">
+              <Truck size={14} className="text-teal-400" /> {logisticName}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-gray-400">Total de paquetes</span>
+            <span className="text-white font-bold text-lg">{orderIds.length}</span>
+          </div>
+          {previewOrders.length < orderIds.length && (
+            <div className="text-[11px] text-amber-400">
+              Vista previa: {previewOrders.length} de {orderIds.length} (otros vienen de otras páginas)
+            </div>
+          )}
+          {Object.keys(platformCounts).length > 0 && (
+            <div className="pt-2 border-t border-navy-800/60">
+              <div className="text-[11px] text-gray-500 uppercase tracking-wider mb-1">Por plataforma</div>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(platformCounts).map(([source, count]) => (
+                  <span key={source} className="text-xs px-2 py-0.5 rounded-full bg-navy-800 text-gray-200">
+                    {PLATFORM_LABELS[source] || source}: <strong className="text-white">{count}</strong>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block">Observaciones (opcional)</label>
+          <textarea
+            value={observations}
+            onChange={e => setObservations(e.target.value)}
+            placeholder="Notas para la logística..."
+            rows={3}
+            className="input w-full resize-none"
+            maxLength={500}
+          />
+        </div>
+
+        <div className="flex gap-2 justify-end pt-2 border-t border-navy-800">
+          <button onClick={onClose} className="btn-secondary" disabled={submitting}>Cancelar</button>
+          <button
+            onClick={handleConfirm}
+            disabled={submitting}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm bg-teal-500 text-white hover:bg-teal-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {submitting ? (
+              <><Loader2 size={14} className="animate-spin" /> Generando remito...</>
+            ) : (
+              <><FileText size={14} /> Confirmar y generar</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function formatARS(amount) {
+  const n = typeof amount === 'string' ? parseFloat(amount) : Number(amount || 0)
+  return n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function ReceiptPrintModal({ receipt, printUrl, logistics, onClose }) {
+  const logisticName = logistics.find(l => l.id === receipt?.logisticsCompanyId)?.name
+    || receipt?.logisticsNameSnapshot
+    || 'logística'
+
+  const handlePrint = () => {
+    window.open(printUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  const handleCopyLink = () => {
+    if (!printUrl) return
+    navigator.clipboard?.writeText(printUrl)
+      .then(() => toast.success('Link del remito copiado'))
+      .catch(() => toast.error('No se pudo copiar'))
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="card-p w-full max-w-lg space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <FileText size={22} className="text-teal-400" /> Remito {receipt?.receiptNumber} generado
           </h2>
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
         </div>
 
-        <div>
-          <label className="text-xs text-gray-400 mb-1 block">Logística *</label>
-          {loadingLogistics ? (
-            <div className="text-sm text-gray-500 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Cargando logísticas...</div>
-          ) : logistics.length === 0 ? (
-            <div className="text-sm text-amber-400">No tenés logísticas vinculadas. Configurá una en Config.</div>
-          ) : (
-            <select
-              value={logisticId}
-              onChange={e => setLogisticId(e.target.value)}
-              className="input w-full"
-            >
-              <option value="">Seleccioná una logística</option>
-              {logistics.map(l => (
-                <option key={l.id} value={l.id}>{l.name}{l.isExternal ? ' (externa)' : ''}</option>
-              ))}
-            </select>
-          )}
-        </div>
+        <p className="text-sm text-gray-300">
+          Imprimí el remito por duplicado para firmar con la logística al momento de entregar los paquetes.
+        </p>
 
-        <div className="flex-1 min-h-0 overflow-y-auto border border-navy-800 rounded-lg">
-          <div className="px-3 py-2 text-xs text-gray-500 uppercase tracking-wider bg-navy-900 sticky top-0 border-b border-navy-800 flex items-center justify-between">
-            <span>{orderIds.length} pedido{orderIds.length !== 1 ? 's' : ''} a asignar</span>
-            {previewOrders.length < orderIds.length && (
-              <span className="text-[10px] normal-case tracking-normal text-gray-600">
-                mostrando {previewOrders.length} de {orderIds.length} — el resto viene de otras paginas
-              </span>
-            )}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg bg-navy-900/60 border border-navy-800 p-3 text-center">
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Paquetes</div>
+            <div className="text-2xl font-bold text-white">{receipt?.totalPackages ?? 0}</div>
           </div>
-          <div className="divide-y divide-navy-800/50">
-            {previewOrders.map(o => (
-              <div key={o.id} className="px-3 py-2 text-sm">
-                <div className="text-gray-200 font-medium">{o.customerName}</div>
-                <div className="text-xs text-gray-500 truncate">{o.address}</div>
-              </div>
-            ))}
+          <div className="rounded-lg bg-teal-500/10 border border-teal-500/30 p-3 text-center">
+            <div className="text-[10px] uppercase tracking-wider text-teal-300 mb-1">Importe</div>
+            <div className="text-xl font-bold text-white">$ {formatARS(receipt?.totalAmount)}</div>
+          </div>
+          <div className="rounded-lg bg-navy-900/60 border border-navy-800 p-3 text-center flex flex-col justify-center">
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Logística</div>
+            <div className="text-sm font-semibold text-white truncate" title={logisticName}>{logisticName}</div>
           </div>
         </div>
 
-        <div className="flex gap-2 justify-end pt-2 border-t border-navy-800">
-          <button onClick={onClose} className="btn-secondary" disabled={assigning}>Cancelar</button>
+        <button
+          onClick={handlePrint}
+          className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-lg bg-teal-500 hover:bg-teal-600 text-white font-bold text-base transition-colors"
+        >
+          <Printer size={18} /> Imprimir remito
+        </button>
+
+        <div className="flex items-center justify-between gap-2">
           <button
-            onClick={handleConfirm}
-            disabled={assigning || !logisticId || logistics.length === 0}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm bg-teal-500 text-white hover:bg-teal-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleCopyLink}
+            className="text-xs text-gray-400 hover:text-teal-300 inline-flex items-center gap-1.5 transition-colors"
           >
-            {assigning ? (
-              <><Loader2 size={14} className="animate-spin" /> Asignando...</>
-            ) : (
-              <>Confirmar asignación</>
-            )}
+            <Copy size={12} /> Copiar link del remito
+          </button>
+          <button onClick={onClose} className="btn-secondary text-sm">
+            Cerrar
           </button>
         </div>
       </div>

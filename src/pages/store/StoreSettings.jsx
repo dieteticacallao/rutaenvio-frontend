@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, useAuth } from '../../lib/store'
-import { Link2, Check, AlertCircle, Unplug, Loader2, ShoppingBag, MessageCircle, Truck } from 'lucide-react'
+import { Link2, Check, AlertCircle, Unplug, Loader2, ShoppingBag, MessageCircle, Truck, FileText, Save } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function StoreSettings() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [tnRefreshKey, setTnRefreshKey] = useState(0)
   const [mlRefreshKey, setMlRefreshKey] = useState(0)
+  const billingRef = useRef(null)
 
   useEffect(() => {
     const tnParam = searchParams.get('tn')
@@ -36,6 +37,17 @@ export default function StoreSettings() {
     }
   }, [searchParams, setSearchParams])
 
+  useEffect(() => {
+    if (searchParams.get('section') === 'billing' && billingRef.current) {
+      billingRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const flash = billingRef.current
+      flash.classList.add('ring-2', 'ring-teal-500/60')
+      setTimeout(() => flash.classList.remove('ring-2', 'ring-teal-500/60'), 2200)
+      searchParams.delete('section')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
+
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
@@ -43,10 +55,105 @@ export default function StoreSettings() {
         <p className="text-sm text-gray-500">Integraciones de tu tienda</p>
       </div>
 
+      <BillingDataSection forwardedRef={billingRef} />
       <TiendanubeSection refreshKey={tnRefreshKey} />
       <MercadoLibreSection refreshKey={mlRefreshKey} />
       <MyLogisticsSection />
       <WhatsAppComingSoonSection />
+    </div>
+  )
+}
+
+function BillingDataSection({ forwardedRef }) {
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [legalName, setLegalName] = useState('')
+  const [taxId, setTaxId] = useState('')
+  const [address, setAddress] = useState('')
+
+  useEffect(() => {
+    api.get('/companies/me')
+      .then(r => {
+        const c = r.data?.data || {}
+        setLegalName(c.legalName || '')
+        setTaxId(c.taxId || '')
+        setAddress(c.address || '')
+        setLoading(false)
+      })
+      .catch(() => { setLoading(false) })
+  }, [])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await api.patch('/companies/me', {
+        legalName: legalName.trim() || null,
+        taxId: taxId.trim() || null,
+        address: address.trim() || null,
+      })
+      toast.success('Datos de facturación guardados')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al guardar')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div ref={forwardedRef} id="billing-data" className="card-p space-y-3 transition-shadow rounded-xl">
+      <h3 className="font-semibold text-white flex items-center gap-2">
+        <FileText size={18} className="text-teal-400" /> Datos de facturación
+      </h3>
+      <p className="text-xs text-gray-500">
+        Estos datos aparecen en los remitos que generás para tus logísticas.
+      </p>
+
+      {loading ? (
+        <div className="text-sm text-gray-500 flex items-center gap-2">
+          <Loader2 size={14} className="animate-spin" /> Cargando...
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">Razón social</label>
+            <input
+              type="text"
+              value={legalName}
+              onChange={e => setLegalName(e.target.value)}
+              placeholder="Mi Tienda S.A."
+              className="input w-full"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">CUIT/DNI *</label>
+            <input
+              type="text"
+              value={taxId}
+              onChange={e => setTaxId(e.target.value)}
+              placeholder="30-12345678-9 o 12345678"
+              className="input w-full"
+            />
+            <p className="text-[11px] text-gray-600 mt-1">Obligatorio para generar remitos</p>
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">Dirección fiscal</label>
+            <input
+              type="text"
+              value={address}
+              onChange={e => setAddress(e.target.value)}
+              placeholder="Av. Corrientes 1234, CABA"
+              className="input w-full"
+            />
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm bg-teal-500 text-white hover:bg-teal-600 transition-colors disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
