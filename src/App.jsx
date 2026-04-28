@@ -18,6 +18,7 @@ import StoreOrders from './pages/store/StoreOrders'
 import StoreRoutes from './pages/store/StoreRoutes'
 import StoreRouteDetail from './pages/store/StoreRouteDetail'
 import StoreSettings from './pages/store/StoreSettings'
+import StoreReceipts from './pages/store/StoreReceipts'
 import OrderDetail from './pages/shared/OrderDetail'
 import TrackingPage from './pages/shared/TrackingPage'
 import RouteView from './pages/shared/RouteView'
@@ -71,6 +72,7 @@ export default function App() {
           <Route path="/tienda/rutas" element={<StoreRoutes />} />
           <Route path="/tienda/rutas/:id" element={<StoreRouteDetail />} />
           <Route path="/tienda/config" element={<StoreSettings />} />
+          <Route path="/tienda/administracion/remitos" element={<StoreReceipts />} />
           <Route path="*" element={<Navigate to="/tienda/dashboard" replace />} />
         </Routes>
       </StoreLayout>

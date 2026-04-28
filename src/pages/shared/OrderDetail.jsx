@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api, STATUS_MAP, useAuth } from '../../lib/store'
-import { ArrowLeft, MapPin, Phone, User, Package, Clock, Star, MessageSquare, Camera, Loader2, FileText, Copy, MessageCircle, Link2 } from 'lucide-react'
+import { ArrowLeft, MapPin, Phone, User, Package, Clock, Star, MessageSquare, Camera, Loader2, FileText, Copy, MessageCircle, Link2, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const TIMELINE_STEPS = [
@@ -16,6 +16,11 @@ const STATUS_ORDER = { PENDING: 0, ASSIGNED: 1, PICKED_UP: 1, IN_TRANSIT: 2, ARR
 function formatDate(d) {
   if (!d) return null
   return new Date(d).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function formatShortDate(d) {
+  if (!d) return null
+  return new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' })
 }
 
 export default function OrderDetail() {
@@ -74,6 +79,32 @@ export default function OrderDetail() {
           {STATUS_MAP[order.status]?.label || order.status}
         </span>
       </div>
+
+      {/* Remito asignado (solo store ve esta card) */}
+      {order.receipt && (
+        <div className="rounded-xl border border-teal-500/20 bg-teal-500/10 p-4 flex items-center gap-3 flex-wrap">
+          <div className="w-10 h-10 rounded-lg bg-teal-500/20 flex items-center justify-center flex-shrink-0">
+            <FileText size={20} className="text-teal-300" />
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-sm font-semibold text-white">
+              Asignado al remito {order.receipt.receiptNumber}
+            </p>
+            <p className="text-xs text-teal-200/80 mt-0.5">
+              {formatShortDate(order.receipt.issuedAt)}
+              {order.receipt.logisticsCompany?.name && (
+                <> · {order.receipt.logisticsCompany.name}</>
+              )}
+            </p>
+          </div>
+          <button
+            onClick={() => window.open(`${api.defaults.baseURL}/receipts/${order.receipt.id}/print`, '_blank', 'noopener,noreferrer')}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-500 text-white hover:bg-teal-600 text-sm font-medium transition-colors"
+          >
+            <Printer size={14} /> Ver remito
+          </button>
+        </div>
+      )}
 
       {/* Timeline */}
       <div className="card-p">

@@ -464,12 +464,19 @@ export default function StoreOrders() {
             ) : filteredOrders.map(order => {
               const inReceipt = !!order.receiptId
               const receiptNumber = order.receipt?.receiptNumber
-              const handleCopyReceipt = (e) => {
+              const receiptId = order.receipt?.id
+              // Ultimo segmento del numero (ej: "2026-04-28-0001" -> "0001")
+              const shortReceiptNumber = receiptNumber
+                ? receiptNumber.split('-').pop()
+                : null
+              const handleOpenReceipt = (e) => {
                 e.stopPropagation()
-                if (!receiptNumber) return
-                navigator.clipboard?.writeText(receiptNumber)
-                  .then(() => toast.success(`Remito ${receiptNumber} copiado`))
-                  .catch(() => toast.error('No se pudo copiar'))
+                if (!receiptId) return
+                window.open(
+                  `${api.defaults.baseURL}/receipts/${receiptId}/print`,
+                  '_blank',
+                  'noopener,noreferrer'
+                )
               }
               return (
                 <tr key={order.id} className={`table-row ${inReceipt ? 'opacity-50' : ''}`}>
@@ -490,14 +497,17 @@ export default function StoreOrders() {
                       {order.source === 'MERCADOLIBRE' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-yellow-400/40" style={{backgroundColor: '#FFE600', color: '#000'}}>ML</span>}
                       {order.source === 'EXCEL' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">XLS</span>}
                       {order.source === 'MANUAL' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-400 border border-gray-500/20">MAN</span>}
-                      {inReceipt && receiptNumber && (
+                    </div>
+                    {/* Linea 2: badge de remito (siempre presente con altura fija para igualar la altura de todas las filas) */}
+                    <div className="mt-1 h-[22px] flex items-center">
+                      {inReceipt && receiptId && shortReceiptNumber && (
                         <button
                           type="button"
-                          onClick={handleCopyReceipt}
-                          title="Click para copiar el número de remito"
-                          className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-300 border border-gray-500/30 hover:bg-gray-500/30 hover:text-white transition-colors cursor-pointer"
+                          onClick={handleOpenReceipt}
+                          title={`Remito ${receiptNumber} - click para imprimir`}
+                          className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-teal-500/10 text-teal-300 border border-teal-500/20 hover:bg-teal-500/20 hover:text-teal-200 transition-colors cursor-pointer w-fit"
                         >
-                          <FileText size={9} /> Remito {receiptNumber}
+                          <FileText size={10} /> Remito #{shortReceiptNumber}
                         </button>
                       )}
                     </div>
