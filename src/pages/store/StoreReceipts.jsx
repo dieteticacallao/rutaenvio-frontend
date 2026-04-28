@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/store'
 import { FileText, Printer, Loader2, Truck, Calendar, Package, DollarSign, Receipt as ReceiptIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -21,6 +22,7 @@ function formatARS(amount) {
 const PAGE_SIZE = 20
 
 export default function StoreReceipts() {
+  const navigate = useNavigate()
   const [receipts, setReceipts] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -236,9 +238,18 @@ export default function StoreReceipts() {
               const obs = r.observations || ''
               const obsTruncated = obs.length > 40 ? obs.slice(0, 40) + '...' : obs
               return (
-                <tr key={r.id} className="table-row">
+                <tr
+                  key={r.id}
+                  onClick={() => navigate(`/tienda/administracion/remitos/${r.id}`)}
+                  className="table-row cursor-pointer"
+                >
                   <td className="p-3 pl-4">
-                    <span className="font-mono text-white font-semibold text-xs">{r.receiptNumber}</span>
+                    <span
+                      className="font-mono text-white font-semibold text-xs no-underline"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      {r.receiptNumber}
+                    </span>
                   </td>
                   <td className="p-3 text-gray-300 whitespace-nowrap">
                     <span className="inline-flex items-center gap-1.5">
@@ -267,7 +278,7 @@ export default function StoreReceipts() {
                   </td>
                   <td className="p-3 pr-4 text-right">
                     <button
-                      onClick={() => handlePrint(r.id)}
+                      onClick={(e) => { e.stopPropagation(); handlePrint(r.id) }}
                       className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-teal-500/10 text-teal-300 border border-teal-500/20 hover:bg-teal-500/20 hover:text-teal-200 transition-colors"
                       title="Imprimir remito"
                     >

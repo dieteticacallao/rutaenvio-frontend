@@ -38,12 +38,19 @@ export default function StoreLayout({ children }) {
       <aside className="w-[220px] flex-shrink-0 bg-navy-900 border-r border-navy-800 flex flex-col">
         <div className="p-5 border-b border-navy-800">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center flex-shrink-0">
               <Store size={16} className="text-white" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="font-bold text-sm text-white tracking-tight">RutaEnvio</div>
-              <div className="text-[10px] text-teal-400 uppercase tracking-widest">Tienda</div>
+              <div
+                className="text-[10px] text-teal-400 uppercase tracking-widest truncate"
+                title={user?.companyName || 'Tienda'}
+              >
+                {user?.companyName
+                  ? (user.companyName.length > 20 ? user.companyName.slice(0, 20) + '…' : user.companyName)
+                  : 'Tienda'}
+              </div>
             </div>
           </div>
         </div>
