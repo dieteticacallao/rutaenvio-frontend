@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth, getRoleLabel } from '../lib/store'
-import { LayoutDashboard, Package, Route, Users, Settings, LogOut, Truck, Clock, ChevronDown, BarChart3, Receipt } from 'lucide-react'
+import { useAuth, getRoleLabel, api } from '../lib/store'
+import { LayoutDashboard, Package, Route, Users, Settings, LogOut, Truck, Clock, ChevronDown, BarChart3, Receipt, DollarSign } from 'lucide-react'
 
 const mainLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -19,9 +19,22 @@ export default function Layout({ children }) {
   const location = useLocation()
 
   const isRoutesSection = location.pathname.startsWith('/routes')
-  const isStatsSection = location.pathname.startsWith('/stats')
+  const isAdminSection = location.pathname.startsWith('/stats') || location.pathname.startsWith('/administracion')
   const [routesOpen, setRoutesOpen] = useState(isRoutesSection)
-  const [statsOpen, setStatsOpen] = useState(isStatsSection)
+  const [adminOpen, setAdminOpen] = useState(isAdminSection)
+  const [pendingCount, setPendingCount] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    const fetchPending = () => {
+      api.get('/payments/pending-count')
+        .then(r => { if (!cancelled) setPendingCount(r.data?.data?.count || 0) })
+        .catch(() => {})
+    }
+    fetchPending()
+    const interval = setInterval(fetchPending, 60000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [location.pathname])
 
   const linkClass = (isActive) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
     isActive
@@ -89,19 +102,24 @@ export default function Layout({ children }) {
 
           {/* Administracion with submenu */}
           <button
-            onClick={() => setStatsOpen(o => !o)}
+            onClick={() => setAdminOpen(o => !o)}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 w-full ${
-              isStatsSection
+              isAdminSection
                 ? 'bg-brand-500/10 text-brand-400 font-medium'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-navy-800/50'
             }`}
           >
             <BarChart3 size={18} />
             <span className="flex-1 text-left">Administracion</span>
-            <ChevronDown size={14} className={`transition-transform duration-200 ${statsOpen ? 'rotate-180' : ''}`} />
+            {pendingCount > 0 && !adminOpen && (
+              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                {pendingCount > 99 ? '99+' : pendingCount}
+              </span>
+            )}
+            <ChevronDown size={14} className={`transition-transform duration-200 ${adminOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {statsOpen && (
+          {adminOpen && (
             <div className="space-y-0.5">
               <NavLink to="/stats" end className={({ isActive }) => subLinkClass(isActive)}>
                 <BarChart3 size={14} />
@@ -114,6 +132,18 @@ export default function Layout({ children }) {
               <NavLink to="/stats/billing" className={({ isActive }) => subLinkClass(isActive)}>
                 <Receipt size={14} />
                 Facturacion
+              </NavLink>
+              <NavLink to="/administracion/cuenta-corriente" className={({ isActive }) => subLinkClass(isActive)}>
+                <DollarSign size={14} />
+                <span className="flex-1">Cuenta corriente</span>
+                {pendingCount > 0 && (
+                  <span
+                    className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold"
+                    title={`${pendingCount} ${pendingCount === 1 ? 'pago' : 'pagos'} esperando confirmación`}
+                  >
+                    {pendingCount > 99 ? '99+' : pendingCount}
+                  </span>
+                )}
               </NavLink>
             </div>
           )}

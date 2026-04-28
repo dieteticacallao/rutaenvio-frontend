@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth, getRoleLabel } from '../lib/store'
-import { LayoutDashboard, Package, Route, Settings, LogOut, Store, BarChart3, FileText, ChevronDown } from 'lucide-react'
+import { useAuth, getRoleLabel, api } from '../lib/store'
+import { LayoutDashboard, Package, Route, Settings, LogOut, Store, BarChart3, FileText, ChevronDown, DollarSign } from 'lucide-react'
 
 const topLinks = [
   { to: '/tienda/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -20,6 +20,19 @@ export default function StoreLayout({ children }) {
 
   const isAdminSection = location.pathname.startsWith('/tienda/administracion')
   const [adminOpen, setAdminOpen] = useState(isAdminSection)
+  const [pendingCount, setPendingCount] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    const fetchPending = () => {
+      api.get('/payments/pending-count')
+        .then(r => { if (!cancelled) setPendingCount(r.data?.data?.count || 0) })
+        .catch(() => {})
+    }
+    fetchPending()
+    const interval = setInterval(fetchPending, 60000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [location.pathname])
 
   const linkClass = (isActive) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
     isActive
@@ -84,7 +97,18 @@ export default function StoreLayout({ children }) {
                 <FileText size={14} />
                 Remitos
               </NavLink>
-              {/* TODO: futuros subitems - Pagos, Cuenta corriente */}
+              <NavLink to="/tienda/administracion/cuenta-corriente" className={({ isActive }) => subLinkClass(isActive)}>
+                <DollarSign size={14} />
+                <span className="flex-1">Cuenta corriente</span>
+                {pendingCount > 0 && (
+                  <span
+                    className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-navy-950 text-[10px] font-bold"
+                    title={`${pendingCount} ${pendingCount === 1 ? 'pago pendiente' : 'pagos pendientes'} de confirmación`}
+                  >
+                    {pendingCount > 99 ? '99+' : pendingCount}
+                  </span>
+                )}
+              </NavLink>
             </div>
           )}
 

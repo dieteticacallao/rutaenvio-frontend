@@ -20,6 +20,8 @@ import StoreRouteDetail from './pages/store/StoreRouteDetail'
 import StoreSettings from './pages/store/StoreSettings'
 import StoreReceipts from './pages/store/StoreReceipts'
 import StoreReceiptDetail from './pages/store/StoreReceiptDetail'
+import StoreAccountStatement from './pages/store/StoreAccountStatement'
+import LogisticsAccountStatement from './pages/logistics/LogisticsAccountStatement'
 import OrderDetail from './pages/shared/OrderDetail'
 import TrackingPage from './pages/shared/TrackingPage'
 import RouteView from './pages/shared/RouteView'
@@ -75,6 +77,7 @@ export default function App() {
           <Route path="/tienda/config" element={<StoreSettings />} />
           <Route path="/tienda/administracion/remitos" element={<StoreReceipts />} />
           <Route path="/tienda/administracion/remitos/:id" element={<StoreReceiptDetail />} />
+          <Route path="/tienda/administracion/cuenta-corriente" element={<StoreAccountStatement />} />
           <Route path="*" element={<Navigate to="/tienda/dashboard" replace />} />
         </Routes>
       </StoreLayout>
@@ -92,6 +95,7 @@ export default function App() {
         <Route path="/stats" element={<StatsGeneral />} />
         <Route path="/stats/drivers" element={<StatsDrivers />} />
         <Route path="/stats/billing" element={<StatsBilling />} />
+        <Route path="/administracion/cuenta-corriente" element={<LogisticsAccountStatement />} />
         <Route path="/drivers" element={<Drivers />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" />} />
