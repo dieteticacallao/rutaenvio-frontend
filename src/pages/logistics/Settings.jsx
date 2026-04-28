@@ -133,8 +133,8 @@ function ZoneModal({ zone, onClose, onSaved }) {
     try {
       if (isNew) {
         await api.post('/zones', { name: name.trim(), description: description.trim() || null, localities })
-        // Set price if provided
-        const zonesRes = await api.get('/zones')
+        // Set price if provided (cache-buster para evitar 304 al re-listar zonas)
+        const zonesRes = await api.get('/zones', { params: { _t: Date.now() } })
         const created = (zonesRes.data?.data || []).find(z => z.name === name.trim())
         if (created && price) {
           await api.put(`/zones/${created.id}`, { price: Number(price) })
@@ -147,8 +147,10 @@ function ZoneModal({ zone, onClose, onSaved }) {
           price: Number(price) || 0
         })
       }
+      // Refetch ANTES del toast para que la lista refleje el precio nuevo
+      // y el usuario lo vea recargado al cerrar el modal
+      await onSaved()
       toast.success(isNew ? 'Zona creada' : 'Zona actualizada')
-      onSaved()
       onClose()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al guardar zona')
@@ -232,7 +234,7 @@ function ZonesSection() {
 
   const loadZones = () => {
     setLoading(true)
-    api.get('/zones').then(r => {
+    return api.get('/zones', { params: { _t: Date.now() } }).then(r => {
       setZones(r.data?.data || [])
       setLoading(false)
     }).catch(() => { setZones([]); setLoading(false) })
