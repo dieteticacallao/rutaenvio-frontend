@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../../lib/store'
-import { Users, Plus, X, Phone, Key, ToggleLeft, ToggleRight, MapPin, Check } from 'lucide-react'
+import { Users, Plus, X, Phone, Key, ToggleLeft, ToggleRight, MapPin, Check, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Drivers() {
@@ -42,6 +42,26 @@ export default function Drivers() {
       load()
     } catch (err) {
       toast.error('Error al actualizar')
+    }
+  }
+
+  const removeDriver = async (driver) => {
+    const ok = window.confirm(
+      `¿Estás seguro que querés eliminar a ${driver.name}? Esta acción desactiva al cadete pero conserva su historial de rutas. No podrá volver a ingresar.`
+    )
+    if (!ok) return
+    try {
+      await api.delete(`/drivers/${driver.id}`)
+      toast.success('Cadete eliminado')
+      load()
+    } catch (err) {
+      const status = err.response?.status
+      const msg = err.response?.data?.error
+      if (status === 409) {
+        toast.error(msg || 'Este cadete tiene una ruta en curso. Finalizá la ruta primero.')
+      } else {
+        toast.error(msg || 'Error al eliminar cadete')
+      }
     }
   }
 
@@ -114,6 +134,13 @@ export default function Drivers() {
               <button onClick={() => toggleActive(driver.id, driver.isActive)}
                 className={`btn-ghost text-xs flex-1 justify-center ${!driver.isActive ? 'text-emerald-400' : 'text-amber-400'}`}>
                 {driver.isActive ? <><ToggleRight size={14} /> Desactivar</> : <><ToggleLeft size={14} /> Activar</>}
+              </button>
+              <button
+                onClick={() => removeDriver(driver)}
+                className="btn-ghost text-xs justify-center text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                title="Eliminar cadete"
+              >
+                <Trash2 size={14} />
               </button>
             </div>
           </div>
